@@ -17,6 +17,7 @@ import {
   parseEgyptianNationalId,
   parseMrz,
 } from "@/lib/doc-validators";
+import { normalizeForVlm, isLikelyTooLarge } from "@/lib/image-server";
 
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
@@ -41,18 +42,66 @@ function buildContent(prompt: string, images: string[]): ImageContent[] {
   return content;
 }
 
+/** Detect the VLM "image format/parse error" (code 1210) from any error shape. */
+function isImageFormatError(e: any): boolean {
+  const msg = String(e?.message || e?.toString?.() || "");
+  return (
+    msg.includes("1210") ||
+    msg.includes("图片输入格式") ||
+    msg.includes("图片解析错误") ||
+    /image.*(format|parse|invalid)/i.test(msg)
+  );
+}
+
+/**
+ * Call the vision API with automatic image normalization + retry.
+ * If the first call fails with an image-format error (1210), we re-compress
+ * the images server-side and retry once. This fixes the common case where a
+ * user uploads a large phone photo (HEIC, multi-MB JPEG) that the VLM rejects.
+ */
 async function callVision(prompt: string, images: string[]): Promise<string> {
   const zai = await getZai();
-  const response = await zai.chat.completions.createVision({
-    messages: [
-      {
-        role: "user",
-        content: buildContent(prompt, images),
-      },
-    ],
-    thinking: { type: "disabled" },
-  } as any);
-  return response.choices[0]?.message?.content ?? "";
+
+  // Pre-emptively normalize any obviously-too-large images to avoid a wasted round-trip.
+  const prepared: string[] = [];
+  for (const img of images) {
+    if (isLikelyTooLarge(img)) {
+      prepared.push(await normalizeForVlm(img));
+    } else {
+      prepared.push(img);
+    }
+  }
+
+  const doCall = async (imgs: string[]) => {
+    const response = await zai.chat.completions.createVision({
+      messages: [
+        {
+          role: "user",
+          content: buildContent(prompt, imgs),
+        },
+      ],
+      thinking: { type: "disabled" },
+    } as any);
+    return response.choices[0]?.message?.content ?? "";
+  };
+
+  try {
+    return await doCall(prepared);
+  } catch (e: any) {
+    if (isImageFormatError(e)) {
+      // Re-compress ALL images (not just the big ones) and retry once
+      const recompressed: string[] = [];
+      for (const img of prepared) {
+        try {
+          recompressed.push(await normalizeForVlm(img));
+        } catch {
+          recompressed.push(img);
+        }
+      }
+      return await doCall(recompressed);
+    }
+    throw e;
+  }
 }
 
 function tryParseJson(text: string): any | null {

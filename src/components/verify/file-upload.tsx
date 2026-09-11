@@ -16,14 +16,28 @@ interface FileUploadProps {
   className?: string;
 }
 
-/** Resize & compress an uploaded image file to a JPEG data URL (max ~1280px). */
-function fileToCompressedDataUrl(file: File, maxSize = 1280, quality = 0.85): Promise<string> {
+/** Resize & compress an uploaded image file to a JPEG data URL.
+ *  Enforces BOTH a max pixel dimension AND a max byte size, iteratively
+ *  lowering quality. This prevents the VLM API from rejecting large phone
+ *  photos with error code 1210.
+ */
+function fileToCompressedDataUrl(
+  file: File,
+  maxSize = 1280,
+  initialQuality = 0.8,
+  maxBytes = 700 * 1024 // ~700KB target
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read file"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("Invalid image"));
+      img.onerror = () =>
+        reject(
+          new Error(
+            "Could not decode this image. If it's a HEIC photo from an iPhone, please convert it to JPG first."
+          )
+        );
       img.onload = () => {
         let { width, height } = img;
         if (width > maxSize || height > maxSize) {
@@ -41,7 +55,31 @@ function fileToCompressedDataUrl(file: File, maxSize = 1280, quality = 0.85): Pr
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Canvas error"));
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
+
+        // Iteratively lower quality to hit the byte budget.
+        let quality = initialQuality;
+        let dataUrl = canvas.toDataURL("image/jpeg", quality);
+        while (dataUrl.length > maxBytes * 1.37 && quality > 0.35) {
+          quality = Math.max(0.35, quality - 0.15);
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+
+        // If still too big, downscale the canvas and retry.
+        let scale = 1;
+        while (dataUrl.length > maxBytes * 1.37 && scale > 0.4) {
+          scale = Math.round(scale * 0.8 * 10) / 10;
+          const sw = Math.max(1, Math.round(width * scale));
+          const sh = Math.max(1, Math.round(height * scale));
+          const c2 = document.createElement("canvas");
+          c2.width = sw;
+          c2.height = sh;
+          const cx2 = c2.getContext("2d");
+          if (!cx2) break;
+          cx2.drawImage(img, 0, 0, sw, sh);
+          dataUrl = c2.toDataURL("image/jpeg", Math.max(0.5, quality));
+        }
+
+        resolve(dataUrl);
       };
       img.src = reader.result as string;
     };
@@ -127,13 +165,13 @@ export function FileUpload({
               <Upload className="h-7 w-7" />
             )}
             <span className="text-sm font-medium">Click or drop image here</span>
-            <span className="text-xs">JPG / PNG up to ~5MB</span>
+            <span className="text-xs">JPG / PNG / WEBP (auto-compressed)</span>
           </button>
         )}
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0] ?? undefined)}
         />

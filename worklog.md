@@ -97,3 +97,52 @@ Stage Summary:
 - Image quality assessment warns users about blur/glare/bad framing before extraction.
 - Training database stores labeled samples; 6 deterministic synthetic samples seeded for meaningful evaluation.
 - Full stress test runs the pipeline against every sample, measures per-field accuracy + response time + quality, shows charts + detailed comparison table.
+
+---
+Task ID: 12
+Agent: main
+Task: Fix "Extraction failed — The string did not match the expected pattern" when uploading Egyptian ID.
+
+Root cause found:
+- The VLM API (z-ai vision) returns HTTP 400 with error code 1210 ("图片输入格式/解析错误" = "image input format/parse error") when the uploaded image is too large, in an unsupported format (HEIC from iPhone), or corrupt.
+- This 400 propagated up through extractDocumentData → document API route → fetch() in the browser.
+- The cryptic "The string did not match the expected pattern" message was the browser's fetch wrapper around the server's 500 error containing the Chinese error string.
+
+Fix (3 layers of defense):
+
+1. Client-side compression (file-upload.tsx):
+   - Rewrote fileToCompressedDataUrl to enforce BOTH max pixel dimension (1280px) AND max byte budget (~700KB).
+   - Iteratively lowers JPEG quality (0.8 → 0.35) then downscales canvas (×0.8 each pass) until under budget.
+   - Better error message for HEIC decode failures.
+   - accept attribute now explicitly includes image/heic, image/heif, image/webp.
+
+2. Server-side normalization (image-server.ts — NEW):
+   - parseDataUrl: validates data URL + decodes base64 to Buffer.
+   - normalizeForVlm: uses sharp to auto-orient (EXIF), resize to max 1280px, re-encode as mozjpeg JPEG, iteratively lower quality (80→35) then downscale (1280→640) until under 600KB. Flattens alpha to white background for PNGs with transparency.
+   - isLikelyTooLarge: quick check (>1.2MB base64) to decide whether to pre-normalize.
+
+3. VLM service retry (vlm-service.ts):
+   - callVision now pre-normalizes any image flagged as too large.
+   - On 1210 / "图片输入格式" / image-format errors, re-compresses ALL images with normalizeForVlm and retries once.
+   - isImageFormatError helper detects the error from any shape.
+
+4. Better error mapping (document/route.ts):
+   - 1210 → 422 "image_format_error" with friendly message.
+   - 1213/content → 422 "content_filtered".
+   - timeout/ETIMEDOUT → 504 "timeout".
+   - invalid data URL → 400 "invalid_image".
+   - All responses now include a `code` field.
+
+5. doc-capture-step.tsx:
+   - Maps API error codes (image_format_error, timeout, content_filtered) to specific user-friendly messages.
+   - Better toast on failure.
+
+Verification (Agent Browser):
+- Uploaded a passport image → extraction succeeded in 29.3s, status 200, no 1210 error.
+- Image quality panel showed 85%, fields extracted, Arabic OCR pass dumped.
+- Lint: 0 errors. Dev log: clean, no 1210 errors.
+
+Stage Summary:
+- Uploading Egyptian ID (or any document) no longer fails with the cryptic "string did not match" error.
+- Large phone photos, HEIC images, and oversized JPEGs are now auto-compressed client-side AND server-side with sharp, with automatic VLM retry.
+- If extraction genuinely can't succeed, users now see a clear, actionable message ("try a clearer JPG/PNG photo") instead of a cryptic error.

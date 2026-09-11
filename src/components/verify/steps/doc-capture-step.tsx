@@ -43,14 +43,27 @@ export function DocCaptureStep() {
         });
         const json = await res.json();
         if (cancelled) return;
-        if (!res.ok) throw new Error(json.error || "Extraction failed");
+        if (!res.ok) {
+          // Map API error codes to friendly messages
+          const code = json.code;
+          let msg = json.error || "Extraction failed";
+          if (code === "image_format_error") {
+            msg =
+              "The AI couldn't read this image — it may be too large or in an unsupported format (HEIC, etc). We auto-compress, but please try a clearer JPG/PNG photo.";
+          } else if (code === "timeout") {
+            msg = "The AI took too long. Please try again with a clearer, smaller photo.";
+          } else if (code === "content_filtered") {
+            msg = "The AI declined to process this image. Please try a different photo of the document.";
+          }
+          throw new Error(msg);
+        }
         setDocExtracted(json.data as any);
         toast.success("Document data extracted");
         goNext();
       } catch (e: any) {
         if (!cancelled) {
-          setError(e?.message || "Failed to read document");
-          toast.error("Could not read document. Try retaking.");
+          setError(e?.message || "Failed to read document. Please retake the photo.");
+          toast.error("Could not read document — try retaking.");
         }
       } finally {
         if (!cancelled) setDocLoading(false);
