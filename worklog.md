@@ -397,3 +397,66 @@ BRAND COLORS (confirmed from manifest.webmanifest + meta theme-color):
 - Accent: teal-green (#2BB3A5 in my implementation, matches the brand)
 
 All already applied in globals.css and verified rendering correctly.
+
+---
+Task ID: 17
+Agent: main
+Task: Implement worldwide document specs database + Arabic translation + security hardening.
+
+IMPLEMENTED:
+
+1. Worldwide Document Specs Database (src/lib/doc-specs/catalog.ts):
+   - 41 document specs across 32 countries
+   - National IDs: 26 countries (Egypt, Saudi Arabia, UAE, Kuwait, Qatar,
+     Jordan, Morocco, Tunisia, Algeria, Lebanon, Iraq, Syria, Libya,
+     Sudan, Bahrain, Oman, Palestine, Yemen, Turkey, India, China,
+     Nigeria, South Africa, US, UK, Germany, France, Brazil, Russia)
+   - Passports: 8 countries (Egypt, Saudi Arabia, US, UK, Germany,
+     France, Canada, Australia)
+   - Driver Licenses: 6 countries (Egypt, US, UK, Germany, Japan,
+     Canada, Australia)
+   - Each spec includes: field positions (% of card dimensions), MRZ
+     format (TD1/TD2/TD3), national ID regex pattern + length,
+     language code, native + English field labels
+   - API: GET /api/verify/specs (filter by country, docType, search)
+   - UI: SpecsBrowser view with search, country/type filters, detail
+     dialog showing field positions + validation patterns
+
+2. Arabic → English Translation Pass (vlm-service.ts):
+   - Pass 4: if Arabic name present but no English → translate via LLM
+   - If English name present but no Arabic → transliterate via LLM
+   - Cross-validation: if both present, translate Arabic→English and
+     verify consistency via fieldMatches; store the cross-validated
+     translation in extraFields._nameEn_fromArabic for audit
+   - Pass 5: country detection via national ID pattern matching against
+     the catalog; stores _detectedCountry, _idPatternMatched, etc.
+
+3. Security Hardening:
+   - src/lib/security.ts: sanitizeForDb (strips control chars, caps at
+     500 chars), validateDataUrl (checks format + 6MB size limit),
+     escapeHtml, validateNationalId
+   - next.config.ts: CSP headers (default-src 'self', frame-ancestors
+     'none'), HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff,
+     Referrer-Policy, Permissions-Policy (camera only)
+   - Records API: all text fields sanitized before DB insert, image data
+     URLs validated (format + size), oversized images dropped gracefully
+
+4. Backup Script (scripts/backup-turso.ts):
+   - Dumps all 4 tables as INSERT statements to backup/*.sql
+   - Verified: backup created successfully from Turso
+
+VERIFIED:
+- Specs API: returns 41 specs, 32 countries (live on Vercel) ✓
+- Records API: reads + writes work on Turso via Vercel ✓
+- 4-pass extraction: 15.4s, Arabic name + national ID correct, country
+  detected as Egypt (EG), ID pattern matched, English translation
+  cross-validated against Arabic ✓
+- Specs browser UI: renders with search, filters, detail dialog ✓
+- Lint: 0 errors ✓
+- Pushed to GitHub (commit 413c47b) + auto-deployed to Vercel ✓
+
+Stage Summary:
+- The app now has a worldwide document specs database (32 countries),
+  Arabic→English translation with cross-validation, security hardening
+  (CSP, sanitization, input validation), and a backup script.
+- Deployed live at https://cirkle-verify.vercel.app
