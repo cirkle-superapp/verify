@@ -13,8 +13,8 @@ model Verification {
   id            String   @id @default(cuid())
   // Document info
   docType       String   // "national_id" | "passport" | "driver_license" | "residence"
-  docSide       String   @default("front") // "front" | "back" | "both"
-  docImageFront String?  // base64 stored briefly (data URL)
+  docSide       String   @default("front")
+  docImageFront String?
   docImageBack  String?
   // Extracted fields (Arabic + English)
   fullNameAr    String?
@@ -29,18 +29,109 @@ model Verification {
   job           String?
   religion      String?
   maritalStatus String?
-  extraFields   String?  // JSON string of any other extracted fields
+  extraFields   String?
+  // Image quality + per-field confidence (JSON)
+  imageQuality   Float   @default(0)
+  fieldConfidence String?
   // Selfie + liveness
   selfieImage   String?
-  livenessFrames String?  // JSON array of frame data URLs
-  livenessActions String?  // JSON array of performed actions
+  livenessFrames String?
+  livenessActions String?
   // Results
   docConfidence  Float    @default(0)
   faceMatchScore Float    @default(0)
   livenessScore  Float    @default(0)
-  status         String   @default("pending") // pending | verified | failed | rejected
+  status         String   @default("pending")
   notes          String?
   // Meta
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// Training database: labeled document samples with ground-truth fields
+model DocumentSample {
+  id              String   @id @default(cuid())
+  name            String
+  docType         String
+  source          String   @default("manual") // "manual" | "synthetic"
+  imageData       String   // base64 front
+  backImageData   String?
+  // Ground-truth fields
+  fullNameAr      String?
+  fullNameEn      String?
+  nationalId      String?
+  birthDate       String?
+  address         String?
+  gender          String?
+  documentNo      String?
+  expiryDate      String?
+  nationality     String?
+  job             String?
+  religion        String?
+  maritalStatus   String?
+  notes           String?
+  tags            String?  // JSON array of tags
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// A stress-test / evaluation run over the DocumentSample dataset
+model EvaluationRun {
+  id              String   @id @default(cuid())
+  name            String?
+  status          String   @default("running") // running | completed | failed
+  totalSamples    Int      @default(0)
+  completedSamples Int     @default(0)
+  passedSamples   Int      @default(0)
+  avgDocTimeMs    Float    @default(0)
+  avgQualityScore Float    @default(0)
+  overallAccuracy Float    @default(0)
+  // Per-field accuracy JSON: { fieldName: { correct, total } }
+  fieldAccuracy   String?
+  // Concurrent config used
+  concurrency     Int      @default(1)
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  results         EvaluationResult[]
+}
+
+// Per-sample evaluation result
+model EvaluationResult {
+  id              String   @id @default(cuid())
+  runId           String
+  run             EvaluationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  sampleId        String?
+  sampleName      String?
+  docType         String
+  // Expected vs actual for each key field
+  expectedNameAr  String?
+  actualNameAr    String?
+  nameArCorrect   Boolean  @default(false)
+  expectedNameEn  String?
+  actualNameEn    String?
+  nameEnCorrect   Boolean  @default(false)
+  expectedNationalId String?
+  actualNationalId String?
+  nationalIdCorrect Boolean @default(false)
+  expectedDocumentNo String?
+  actualDocumentNo String?
+  documentNoCorrect Boolean @default(false)
+  expectedBirthDate String?
+  actualBirthDate String?
+  birthDateCorrect Boolean @default(false)
+  expectedGender  String?
+  actualGender    String?
+  genderCorrect   Boolean  @default(false)
+  expectedExpiry  String?
+  actualExpiry    String?
+  expiryCorrect   Boolean  @default(false)
+  // metrics
+  responseTimeMs  Int      @default(0)
+  confidence       Float    @default(0)
+  imageQuality     Float    @default(0)
+  fieldsTotal      Int      @default(0)
+  fieldsCorrect    Int      @default(0)
+  passed           Boolean  @default(false)
+  error            String?
+  createdAt        DateTime @default(now())
 }

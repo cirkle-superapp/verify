@@ -155,8 +155,9 @@ function DetailDialog({ record, onClose }: { record: VerificationRecord | null; 
           {record.selfieImage && <ImgBlock label="Selfie" src={record.selfieImage} />}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <MiniStat label="OCR confidence" value={`${Math.round(record.docConfidence * 100)}%`} />
+          <MiniStat label="Image quality" value={record.imageQuality ? `${Math.round(record.imageQuality * 100)}%` : "—"} />
           <MiniStat label="Face match" value={`${Math.round(record.faceMatchScore)}%`} />
           <MiniStat label="Liveness" value={`${Math.round(record.livenessScore)}%`} />
         </div>

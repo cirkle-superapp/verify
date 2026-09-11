@@ -61,3 +61,39 @@ Stage Summary:
 - Live movement liveness: 3 random challenges (turn left/right, look up, blink, smile) with frame capture + AI analysis.
 - Records persisted to SQLite with confidence scores; history dashboard with detail dialog.
 - Sticky footer, responsive, RTL Arabic support, emerald trust theme.
+
+---
+Task ID: 9-11
+Agent: main
+Task: Improve Arabic OCR + image reading, add training database + full stress testing.
+
+Work Log:
+- Prisma schema: added DocumentSample (labeled training data with ground truth), EvaluationRun, EvaluationResult models. Added imageQuality + fieldConfidence columns to Verification. Pushed + regenerated client.
+- doc-validators.ts: normalizeArabic (strips Tatweel, normalizes Alef variants), digitsOnly (Arabic-Indic → Western), parseEgyptianNationalId (decodes 14-digit Egyptian ID: century/year/month/day/gender/checksum), normalizeGender (Arabic+English), normalizeDate (ISO + DD/MM/YYYY + Arabic month names), parseMrz (TD1 + TD3 passport MRZ), fieldMatches (fuzzy comparison for evaluation).
+- vlm-service.ts REWRITE: multi-pass extraction:
+    Pass 1: assessImageQuality — returns isBlurry/hasGlare/isFramedWell/rotation/lighting/issues/suggestions + overallQuality (0-1).
+    Pass 2: ocrArabicText — Arabic-first OCR pass preserving exact glyphs, diacritics, reading order, Arabic-Indic digits.
+    Pass 3: extractStructuredFields — uses Arabic text as priming context, returns all fields + per-field confidence + MRZ lines.
+    Post-processing: validates Egyptian national ID checksum, infers gender from NID, normalizes dates/gender/Arabic, parses MRZ.
+- image-enhance.ts: client-side canvas enhancement (auto-contrast histogram stretch, unsharp mask, contrast/brightness, grayscale) + estimateSharpness (Laplacian variance blur detector).
+- synthetic-doc.ts: 6 deterministic synthetic Egyptian-ID/passport samples with known ground truth. renderSyntheticDoc renders a card to canvas with EXACT text matching the spec — so OCR accuracy is measurable.
+- New API routes:
+    /api/verify/samples (GET list, POST create)
+    /api/verify/samples/[id] (GET, DELETE)
+    /api/verify/samples/seed (POST bulk-insert synthetic, DELETE clear synthetic)
+    /api/verify/evaluate (GET list runs, POST create run)
+    /api/verify/evaluate/[id] (GET with results, DELETE)
+    /api/verify/evaluate/run (POST — runs full 3-pass extraction on a sample, compares each field to ground truth, persists EvaluationResult, updates run aggregate with per-field accuracy + avg time)
+- New UI views:
+    EvaluationLab: stress test runner with concurrency selector (1-4), live progress bar, 4 stat cards (accuracy/passed/avg time/quality), per-field accuracy bar chart (recharts), pass/fail pie, response-time line chart, full results table with per-field ✓/✗ + expected vs actual.
+    TrainingData: seed button (renders synthetic samples client-side via canvas, uploads to DB), clear synthetic, add-sample dialog (upload image + fill ground truth fields), sample grid with images + fields + delete.
+- Doc review step upgraded: image quality panel (blur/glare/framing/rotation/lighting + issues + suggestions), field validation panel (Egyptian ID checksum valid/invalid, gender inferred from NID), per-field confidence badges, "Enhance & re-extract" button (runs client-side image enhancement then re-runs 3-pass extraction), Arabic OCR pass raw dump, MRZ-parsed badge, 3-pass OCR badge.
+- History view detail dialog: added image quality stat.
+- Main page: new Training + Lab nav buttons.
+- Lint: 0 errors. Agent Browser: synthetic samples seed works (6/6), stress test launches and polls.
+
+Stage Summary:
+- Arabic OCR now uses 3 passes (quality → Arabic-first → structured) + post-validation (Egyptian ID checksum, MRZ parsing, normalization).
+- Image quality assessment warns users about blur/glare/bad framing before extraction.
+- Training database stores labeled samples; 6 deterministic synthetic samples seeded for meaningful evaluation.
+- Full stress test runs the pipeline against every sample, measures per-field accuracy + response time + quality, shows charts + detailed comparison table.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, History, Home as HomeIcon } from "lucide-react";
+import { ShieldCheck, History, Home as HomeIcon, FlaskConical, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -14,15 +14,16 @@ import { SelfieStep } from "@/components/verify/steps/selfie-step";
 import { LivenessStep } from "@/components/verify/steps/liveness-step";
 import { ResultStep } from "@/components/verify/steps/result-step";
 import { HistoryView } from "@/components/verify/history-view";
+import { EvaluationLab } from "@/components/verify/evaluation-lab";
+import { TrainingData } from "@/components/verify/training-data";
+
+type View = "wizard" | "history" | "eval" | "training";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
   const setStep = useVerificationStore((s) => s.setStep);
   const reset = useVerificationStore((s) => s.reset);
-  const [view, setView] = useState<"wizard" | "history">("wizard");
-
-  const goHistory = () => setView("history");
-  const goWizard = () => setView("wizard");
+  const [view, setView] = useState<View>("wizard");
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-emerald-50/40 via-background to-background">
@@ -48,16 +49,11 @@ export default function Home() {
             </div>
           </button>
 
-          <div className="flex items-center gap-2">
-            {view === "history" ? (
-              <Button variant="outline" size="sm" onClick={goWizard}>
-                <HomeIcon className="h-4 w-4 mr-1" /> New verification
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={goHistory}>
-                <History className="h-4 w-4 mr-1" /> History
-              </Button>
-            )}
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
+            <NavButton active={view === "wizard"} onClick={() => setView("wizard")} icon={HomeIcon} label="Verify" />
+            <NavButton active={view === "history"} onClick={() => setView("history")} icon={History} label="History" />
+            <NavButton active={view === "training"} onClick={() => setView("training")} icon={Database} label="Training" />
+            <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label="Lab" />
           </div>
         </div>
       </header>
@@ -65,7 +61,11 @@ export default function Home() {
       {/* Main */}
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-6 sm:py-8">
         {view === "history" ? (
-          <HistoryView onBack={goWizard} />
+          <HistoryView onBack={() => setView("wizard")} />
+        ) : view === "training" ? (
+          <TrainingData onBack={() => setView("wizard")} />
+        ) : view === "eval" ? (
+          <EvaluationLab onBack={() => setView("wizard")} />
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (
@@ -83,7 +83,7 @@ export default function Home() {
               {step === "doc_review" && <DocReviewStep />}
               {step === "selfie" && <SelfieStep />}
               {step === "liveness" && <LivenessStep />}
-              {step === "result" && <ResultStep onViewHistory={goHistory} />}
+              {step === "result" && <ResultStep onViewHistory={() => setView("history")} />}
             </div>
           </div>
         )}
@@ -106,5 +106,13 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function NavButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: any; label: string }) {
+  return (
+    <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className={active ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
+      <Icon className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">{label}</span>
+    </Button>
   );
 }

@@ -33,6 +33,34 @@ export const DOC_TYPES: { id: DocType; label: string; labelAr: string; descripti
   },
 ];
 
+export interface FieldConfidence {
+  fullNameAr?: number;
+  fullNameEn?: number;
+  nationalId?: number;
+  birthDate?: number;
+  address?: number;
+  gender?: number;
+  documentNo?: number;
+  expiryDate?: number;
+  nationality?: number;
+  job?: number;
+  religion?: number;
+  maritalStatus?: number;
+}
+
+export interface ImageQualityAssessment {
+  overallQuality: number; // 0-1
+  isDocument: boolean;
+  isBlurry: boolean;
+  hasGlare: boolean;
+  isFramedWell: boolean;
+  rotation: "none" | "slight" | "significant";
+  lighting: "good" | "too_dark" | "too_bright" | "poor";
+  isFullFrame: boolean;
+  issues: string[];
+  suggestions: string[];
+}
+
 export interface ExtractedDocumentData {
   fullNameAr?: string;
   fullNameEn?: string;
@@ -48,8 +76,18 @@ export interface ExtractedDocumentData {
   maritalStatus?: string;
   extraFields?: Record<string, string>;
   rawText?: string;
+  arabicText?: string; // Arabic-only OCR pass output
   hasPhoto?: boolean;
   confidence: number;
+  fieldConfidence?: FieldConfidence;
+  imageQuality?: ImageQualityAssessment;
+  mrzParsed?: boolean;
+  validationFlags?: {
+    nationalIdValid?: boolean;
+    nationalIdChecksumValid?: boolean;
+    genderInferred?: "Male" | "Female";
+  };
+  passes?: number; // number of VLM passes performed
 }
 
 export interface FaceMatchResult {
@@ -138,8 +176,90 @@ export interface VerificationRecord {
   docConfidence: number;
   faceMatchScore: number;
   livenessScore: number;
+  imageQuality?: number | null;
+  fieldConfidence?: string | null;
   status: VerificationStatus;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Training sample (labeled document with ground truth)
+export interface TrainingSample {
+  id: string;
+  name: string;
+  docType: DocType;
+  source: "manual" | "synthetic";
+  imageData: string;
+  backImageData?: string | null;
+  fullNameAr?: string | null;
+  fullNameEn?: string | null;
+  nationalId?: string | null;
+  birthDate?: string | null;
+  address?: string | null;
+  gender?: string | null;
+  documentNo?: string | null;
+  expiryDate?: string | null;
+  nationality?: string | null;
+  job?: string | null;
+  religion?: string | null;
+  maritalStatus?: string | null;
+  notes?: string | null;
+  tags?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EvaluationResultRow {
+  id: string;
+  runId: string;
+  sampleId?: string | null;
+  sampleName?: string | null;
+  docType: DocType;
+  expectedNameAr?: string | null;
+  actualNameAr?: string | null;
+  nameArCorrect: boolean;
+  expectedNameEn?: string | null;
+  actualNameEn?: string | null;
+  nameEnCorrect: boolean;
+  expectedNationalId?: string | null;
+  actualNationalId?: string | null;
+  nationalIdCorrect: boolean;
+  expectedDocumentNo?: string | null;
+  actualDocumentNo?: string | null;
+  documentNoCorrect: boolean;
+  expectedBirthDate?: string | null;
+  actualBirthDate?: string | null;
+  birthDateCorrect: boolean;
+  expectedGender?: string | null;
+  actualGender?: string | null;
+  genderCorrect: boolean;
+  expectedExpiry?: string | null;
+  actualExpiry?: string | null;
+  expiryCorrect: boolean;
+  responseTimeMs: number;
+  confidence: number;
+  imageQuality: number;
+  fieldsTotal: number;
+  fieldsCorrect: number;
+  passed: boolean;
+  error?: string | null;
+  createdAt: string;
+}
+
+export interface EvaluationRunRow {
+  id: string;
+  name?: string | null;
+  status: "running" | "completed" | "failed";
+  totalSamples: number;
+  completedSamples: number;
+  passedSamples: number;
+  avgDocTimeMs: number;
+  avgQualityScore: number;
+  overallAccuracy: number;
+  fieldAccuracy?: string | null;
+  concurrency: number;
+  startedAt: string;
+  completedAt?: string | null;
+  results?: EvaluationResultRow[];
 }

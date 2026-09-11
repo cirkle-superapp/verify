@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
     const docConfidence = extracted?.confidence ?? 0;
     const faceMatchScore = faceMatch?.similarity ?? 0;
     const livenessScore = liveness?.score ?? 0;
+    const imageQuality = extracted?.imageQuality?.overallQuality ?? 0;
+    const fieldConfidence = extracted?.fieldConfidence ? JSON.stringify(extracted.fieldConfidence) : null;
 
     // decide status
     let status: VerificationStatus = "pending";
@@ -71,6 +73,8 @@ export async function POST(req: NextRequest) {
         religion: extracted?.religion ?? null,
         maritalStatus: extracted?.maritalStatus ?? null,
         extraFields: extracted?.extraFields ? JSON.stringify(extracted.extraFields) : null,
+        imageQuality,
+        fieldConfidence,
         selfieImage,
         livenessFrames: livenessFrames.length ? JSON.stringify(livenessFrames) : null,
         livenessActions: livenessActions.length ? JSON.stringify(livenessActions) : null,

@@ -5,7 +5,18 @@ import type {
   LivenessResult,
   DocType,
   LivenessAction,
+  ImageQualityAssessment,
+  FieldConfidence,
 } from "@/lib/verification-types";
+import {
+  normalizeArabic,
+  normalizeLatin,
+  normalizeGender,
+  normalizeDate,
+  digitsOnly,
+  parseEgyptianNationalId,
+  parseMrz,
+} from "@/lib/doc-validators";
 
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
@@ -46,14 +57,12 @@ async function callVision(prompt: string, images: string[]): Promise<string> {
 
 function tryParseJson(text: string): any | null {
   if (!text) return null;
-  // Strip markdown code fences if present
   let cleaned = text.trim();
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) cleaned = fence[1].trim();
   try {
     return JSON.parse(cleaned);
   } catch {
-    // Try to find first { ... last }
     const first = cleaned.indexOf("{");
     const last = cleaned.lastIndexOf("}");
     if (first >= 0 && last > first) {
@@ -67,90 +76,255 @@ function tryParseJson(text: string): any | null {
   }
 }
 
+const DOC_LABELS: Record<DocType, string> = {
+  national_id: "Egyptian National ID card (بطاقة الرقم القومي)",
+  passport: "Egyptian / Arab passport (جواز السفر)",
+  driver_license: "Egyptian driver license (رخصة قيادة)",
+  residence: "Residence card for foreigners (بطاقة إقامة)",
+};
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * PASS 1: Image quality assessment (fast pre-check)
+ * ──────────────────────────────────────────────────────────────────────── */
+export async function assessImageQuality(
+  frontImage: string,
+  docType: DocType
+): Promise<ImageQualityAssessment> {
+  const prompt = `You are a document image quality auditor for ${DOC_LABELS[docType]}.
+
+Analyze this document photo and assess its quality for automated OCR. Return STRICT JSON only:
+{
+  "overallQuality": 0.0-1.0,
+  "isDocument": boolean — is this actually a photo of an identity document (not random image)?
+  "isBlurry": boolean — is text blurry / out of focus?
+  "hasGlare": boolean — are there light reflections / glare hiding text?
+  "isFramedWell": boolean — is the document well-centered with margin around it?
+  "rotation": "none" | "slight" | "significant" — is the document rotated?
+  "lighting": "good" | "too_dark" | "too_bright" | "poor",
+  "isFullFrame": boolean — is the ENTIRE document visible (not cropped at edges)?
+  "issues": ["short list of detected problems"],
+  "suggestions": ["short actionable tips for the user to retake"]
+}
+Be concise. Be honest — if the image is poor, say so.`;
+
+  const raw = await callVision(prompt, [frontImage]);
+  const parsed = tryParseJson(raw);
+  if (!parsed) {
+    return {
+      overallQuality: 0.5,
+      isDocument: true,
+      isBlurry: false,
+      hasGlare: false,
+      isFramedWell: true,
+      rotation: "none",
+      lighting: "good",
+      isFullFrame: true,
+      issues: [],
+      suggestions: [],
+    };
+  }
+  return {
+    overallQuality: typeof parsed.overallQuality === "number" ? parsed.overallQuality : 0.5,
+    isDocument: parsed.isDocument ?? true,
+    isBlurry: !!parsed.isBlurry,
+    hasGlare: !!parsed.hasGlare,
+    isFramedWell: !!parsed.isFramedWell,
+    rotation: parsed.rotation ?? "none",
+    lighting: parsed.lighting ?? "good",
+    isFullFrame: parsed.isFullFrame ?? true,
+    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * PASS 2: Arabic-first OCR — read every Arabic glyph on the document
+ * ──────────────────────────────────────────────────────────────────────── */
+export async function ocrArabicText(
+  frontImage: string,
+  backImage: string | null,
+  docType: DocType
+): Promise<string> {
+  const prompt = `You are an expert Arabic OCR engine specialized in ${DOC_LABELS[docType]}.
+
+Read EVERY piece of ARABIC text visible on this document. Preserve:
+- Exact Arabic characters including diacritics (تشكيل) if present
+- Reading order (right-to-left, top-to-bottom)
+- Numbers in Arabic-Indic form (٠١٢٣) if printed that way, otherwise Western
+- Field labels AND their values (e.g. "الاسم: محمد أحمد")
+- The machine-readable zone if present (transcribe the < characters too)
+
+Output ONLY the raw Arabic text, line by line. Do NOT translate. Do NOT add English. Do NOT add commentary or markdown.`;
+  const images = [frontImage];
+  if (backImage) images.push(backImage);
+  return (await callVision(prompt, images)).trim();
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * PASS 3: Structured field extraction (uses Arabic text as context)
+ * ──────────────────────────────────────────────────────────────────────── */
+interface RawStructuredFields {
+  fullNameAr?: string;
+  fullNameEn?: string;
+  nationalId?: string;
+  birthDate?: string;
+  address?: string;
+  gender?: string;
+  documentNo?: string;
+  expiryDate?: string;
+  nationality?: string;
+  job?: string;
+  religion?: string;
+  maritalStatus?: string;
+  extraFields?: Record<string, string>;
+  rawText?: string;
+  hasPhoto?: boolean;
+  fieldConfidence?: FieldConfidence;
+  mrzLine1?: string;
+  mrzLine2?: string;
+  mrzLine3?: string;
+}
+
+async function extractStructuredFields(
+  frontImage: string,
+  backImage: string | null,
+  docType: DocType,
+  arabicText: string
+): Promise<RawStructuredFields> {
+  const prompt = `You are a forensic KYC field extractor for ${DOC_LABELS[docType]}.
+
+I already ran an Arabic OCR pass on this document. Here is the raw Arabic text I read:
+"""
+${arabicText}
+"""
+
+Now combine this Arabic text with what you can see in the image, and extract STRUCTURED fields with high precision.
+
+Return STRICT JSON only (no markdown) with this exact schema:
+{
+  "fullNameAr": "الاسم الكامل بالعربية as printed (4 names: first father grandfather family). Preserve exact spelling. Empty string if absent.",
+  "fullNameEn": "Full name in English/Latin letters as printed. Empty string if absent.",
+  "nationalId": "الرقم القومي — the 14-digit Egyptian national number. ONLY DIGITS, no spaces. Empty string if this document type does not have one.",
+  "birthDate": "تاريخ الميلاد as printed. Prefer ISO YYYY-MM-DD if you can infer the year; otherwise keep the printed format.",
+  "address": "العنوان as printed (governorate, district, street). Empty string if absent.",
+  "gender": "Male/Female/ذكر/أنثى as printed.",
+  "documentNo": "رقم المستند — the document's own serial number (passport number, license number, residence number). NOT the national ID.",
+  "expiryDate": "تاريخ الانتهاء as printed, ISO YYYY-MM-DD if possible. Empty string if absent.",
+  "nationality": "الجنسية as printed (e.g. مصري / Egyptian). Empty string if absent.",
+  "job": "الوظيفة / المهنة as printed. Empty string if absent.",
+  "religion": "الديانة as printed — ONLY include if this document type shows it (Egyptian national ID has it; passports do not). Empty string otherwise.",
+  "maritalStatus": "الحالة الاجتماعية as printed. Empty string if absent.",
+  "extraFields": { "field_name": "value" } for any other readable fields,
+  "rawText": "full OCR dump of every readable line (Arabic + English + numbers) separated by newlines",
+  "hasPhoto": true if a person photo is visible,
+  "fieldConfidence": {
+    "fullNameAr": 0.0-1.0, "fullNameEn": 0.0-1.0, "nationalId": 0.0-1.0,
+    "birthDate": 0.0-1.0, "address": 0.0-1.0, "gender": 0.0-1.0,
+    "documentNo": 0.0-1.0, "expiryDate": 0.0-1.0, "nationality": 0.0-1.0,
+    "job": 0.0-1.0, "religion": 0.0-1.0, "maritalStatus": 0.0-1.0
+  },
+  "mrzLine1": "the first line of the MRZ if present, exactly 44 or 30 chars",
+  "mrzLine2": "the second line of the MRZ if present",
+  "mrzLine3": "the third line of the MRZ if present (TD1 format only)"
+}
+
+Rules:
+- For each field, only fill it if you are confident it is on the document. Otherwise empty string.
+- The nationalId MUST be exactly 14 digits for an Egyptian ID.
+- Preserve Arabic diacritics and exact letter forms.
+- fieldConfidence must reflect how clearly you could read each field (low for blurry/partial).`;
+
+  const images = [frontImage];
+  if (backImage) images.push(backImage);
+  const raw = await callVision(prompt, images);
+  const parsed = tryParseJson(raw);
+  if (!parsed) return { rawText: raw };
+  return parsed as RawStructuredFields;
+}
+
 /**
- * Extract structured data from an Egyptian/Arabic ID document image.
- * Supports national ID, passport, driver license, residence card.
+ * Full multi-pass document extraction: quality → Arabic OCR → structured → validate.
  */
 export async function extractDocumentData(
   frontImage: string,
   backImage: string | null,
   docType: DocType
 ): Promise<ExtractedDocumentData> {
-  const typeLabel: Record<DocType, string> = {
-    national_id: "Egyptian National ID card (بطاقة الرقم القومي)",
-    passport: "Egyptian / Arab passport (جواز السفر)",
-    driver_license: "Egyptian driver license (رخصة قيادة)",
-    residence: "Residence card for foreigners (بطاقة إقامة)",
-  };
-
-  const prompt = `You are a professional OCR + KYC document reader specialized in Egyptian and Arabic identity documents.
-
-Document type: ${typeLabel[docType]}
-
-Carefully read BOTH Arabic and English text on this ${docType.replace("_", " ")}. Extract every visible field with high accuracy, preserving Arabic characters exactly as printed.
-
-Return STRICT JSON only (no markdown, no commentary) with this exact schema:
-{
-  "fullNameAr": "الاسم بالعربية (full name in Arabic) or empty string",
-  "fullNameEn": "Full name in English/Latin or empty string",
-  "nationalId": "National ID number (الرقم القومي) if present, digits only, or empty string",
-  "birthDate": "Date of birth as printed, e.g. 1990-01-15 or 15/01/1990",
-  "address": "Address (العنوان) if present, otherwise empty string",
-  "gender": "Male / Female / ذكر / أنثى as printed",
-  "documentNo": "Document / passport / license number (the document's own serial number, NOT the national id)",
-  "expiryDate": "Expiry date if present, otherwise empty string",
-  "nationality": "Nationality (الجنسية) if present",
-  "job": "Profession (الوظيفة) if present",
-  "religion": "Religion (الديانة) field — ONLY if this document type normally shows it (Egyptian national ID has it). Otherwise empty string.",
-  "maritalStatus": "Marital status (الحالة الاجتماعية) if present",
-  "extraFields": { "field_name": "value" } for any other fields you can read,
-  "rawText": "Full OCR dump of every readable line, preserving Arabic and English, separated by newlines",
-  "hasPhoto": true if a person photo is visible on the document, else false,
-  "confidence": 0.0 to 1.0 — your confidence that the extraction is accurate (image quality, clarity, completeness)
-}
-
-Rules:
-- If a field is not present on this document type, return empty string, NOT null.
-- Keep Arabic text in Arabic script (do not transliterate).
-- The nationalId field is the 14-digit Egyptian national number when present.
-- Be conservative with confidence — only give >0.85 for clear, well-lit, fully visible documents.`;
-
-  const images = [frontImage];
-  if (backImage) images.push(backImage);
-
-  const raw = await callVision(prompt, images);
-  const parsed = tryParseJson(raw);
-
-  if (!parsed) {
-    return {
-      rawText: raw,
-      confidence: 0,
-    };
+  // Pass 1: quality assessment
+  let imageQuality: ImageQualityAssessment | undefined;
+  try {
+    imageQuality = await assessImageQuality(frontImage, docType);
+  } catch (e) {
+    // quality check is best-effort; continue without it
   }
 
+  // Pass 2: Arabic-first OCR
+  let arabicText = "";
+  try {
+    arabicText = await ocrArabicText(frontImage, backImage, docType);
+  } catch (e) {
+    // continue; structured pass will still read the image directly
+  }
+
+  // Pass 3: structured extraction with Arabic context
+  const raw = await extractStructuredFields(frontImage, backImage, docType, arabicText);
+
+  // Post-process & validate
+  const nationalId = digitsOnly(raw.nationalId);
+  const idInfo = docType === "national_id" ? parseEgyptianNationalId(nationalId) : null;
+  const mrzText = [raw.mrzLine1, raw.mrzLine2, raw.mrzLine3].filter(Boolean).join("\n");
+  const mrzInfo = mrzText ? parseMrz(mrzText) : null;
+
+  const fullNameAr = normalizeArabic(raw.fullNameAr) || undefined;
+  const fullNameEn = normalizeLatin(raw.fullNameEn) || undefined;
+  const gender = normalizeGender(raw.gender) || mrzInfo?.gender || idInfo?.gender;
+  const birthDate = normalizeDate(raw.birthDate) || idInfo?.birthDate || mrzInfo?.birthDate;
+  const expiryDate = normalizeDate(raw.expiryDate) || mrzInfo?.expiryDate;
+  const documentNo = normalizeLatin(raw.documentNo) || mrzInfo?.documentNumber;
+  const nationality = normalizeLatin(raw.nationality) || mrzInfo?.nationality;
+
+  // average of field confidences as overall
+  const fc: FieldConfidence = raw.fieldConfidence || {};
+  const fcValues = Object.values(fc).filter((v): v is number => typeof v === "number");
+  const avgFieldConf = fcValues.length ? fcValues.reduce((a, b) => a + b, 0) / fcValues.length : 0.7;
+
+  const confidence = imageQuality
+    ? Math.min(avgFieldConf, 0.4 + imageQuality.overallQuality * 0.6)
+    : avgFieldConf;
+
   return {
-    fullNameAr: parsed.fullNameAr || undefined,
-    fullNameEn: parsed.fullNameEn || undefined,
-    nationalId: parsed.nationalId || undefined,
-    birthDate: parsed.birthDate || undefined,
-    address: parsed.address || undefined,
-    gender: parsed.gender || undefined,
-    documentNo: parsed.documentNo || undefined,
-    expiryDate: parsed.expiryDate || undefined,
-    nationality: parsed.nationality || undefined,
-    job: parsed.job || undefined,
-    religion: parsed.religion || undefined,
-    maritalStatus: parsed.maritalStatus || undefined,
-    extraFields: parsed.extraFields || undefined,
-    rawText: parsed.rawText || raw,
-    hasPhoto: parsed.hasPhoto ?? true,
-    confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.7,
+    fullNameAr,
+    fullNameEn,
+    nationalId,
+    birthDate,
+    address: normalizeArabic(raw.address) || undefined,
+    gender,
+    documentNo,
+    expiryDate,
+    nationality,
+    job: normalizeArabic(raw.job) || undefined,
+    religion: normalizeArabic(raw.religion) || undefined,
+    maritalStatus: normalizeArabic(raw.maritalStatus) || undefined,
+    extraFields: raw.extraFields || undefined,
+    rawText: raw.rawText || arabicText,
+    arabicText: arabicText || undefined,
+    hasPhoto: raw.hasPhoto ?? true,
+    confidence,
+    fieldConfidence: fc,
+    imageQuality,
+    mrzParsed: !!mrzInfo,
+    validationFlags: {
+      nationalIdValid: idInfo?.isValid,
+      nationalIdChecksumValid: idInfo?.checksumValid,
+      genderInferred: idInfo?.gender,
+    },
+    passes: 3,
   };
 }
 
-/**
- * Compare a live selfie with the photo on the document.
- */
+/* ────────────────────────────────────────────────────────────────────────────
+ * Face match (unchanged signature)
+ * ──────────────────────────────────────────────────────────────────────── */
 export async function matchFace(
   selfieImage: string,
   documentImage: string
@@ -191,10 +365,9 @@ Be strict but fair. Account for lighting, angle, and minor appearance changes. A
   };
 }
 
-/**
- * Analyze a sequence of webcam frames captured during a liveness challenge.
- * Verifies the user performed the requested head/face movements in real time.
- */
+/* ────────────────────────────────────────────────────────────────────────────
+ * Liveness check (unchanged)
+ * ──────────────────────────────────────────────────────────────────────── */
 export async function checkLiveness(
   frames: string[],
   performedActions: LivenessAction[]
@@ -249,9 +422,6 @@ A genuine live session with visible movement should score 70+. A single static f
   };
 }
 
-/**
- * Quick single-frame liveness / face presence check used as a pre-check.
- */
 export async function detectFacePresence(image: string): Promise<{ hasFace: boolean; isLikelyLive: boolean; reasoning: string }> {
   const prompt = `Analyze this webcam frame. Return STRICT JSON:
 {
