@@ -151,18 +151,62 @@
   background: oklch(0.68 0.10 180);
 }
 
-/* Cirkle official logo animation — "breathe" opacity pulse
-   (from cirkleapp.vercel.app/logo.svg) */
-@keyframes cirkle-breathe {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+/* Cirkle official animations — copied from cirkleapp.vercel.app CSS
+   (/_next/static/chunks/de79388cad073314.css)
+
+   .animate-orb-float { animation: 6s ease-in-out infinite orbFloat }
+   .animate-pulse-glow { animation: 2.5s ease-in-out infinite pulseGlow }
+
+   @keyframes orbFloat {
+     0%, to { transform: translateY(0) scale(1); }
+     50%   { transform: translateY(-12px) scale(1.05); }
+   }
+   @keyframes pulseGlow {
+     0%, to { box-shadow: 0 0 0 0 hsl(var(--primary)/.5); }
+     50%   { box-shadow: 0 0 0 16px hsl(var(--primary)/0); }
+   }
+*/
+
+@keyframes cirkle-orbFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.05); }
 }
 
+@keyframes cirkle-pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.36 0.07 195 / 0.5); }
+  50% { box-shadow: 0 0 0 16px oklch(0.36 0.07 195 / 0); }
+}
+
+/* Splash entrance — fade in + unblur + scale up (from the live splash screen) */
+@keyframes cirkle-splashIn {
+  0% { opacity: 0; filter: blur(40px); transform: scale(0.3); }
+  100% { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+
+/* Continuous float — used on the logo mark */
+.cirkle-orb-float {
+  animation: cirkle-orbFloat 6s ease-in-out infinite;
+}
+
+/* Splash entrance — used on the hero logo on mount */
+.cirkle-splash-in {
+  animation: cirkle-splashIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Pulse glow — used on primary buttons / active elements */
+.cirkle-pulse-glow {
+  animation: cirkle-pulseGlow 2.5s ease-in-out infinite;
+}
+
+/* Keep the old class as an alias so nothing breaks */
 .cirkle-breathe {
-  animation: cirkle-breathe 2.5s ease-in-out infinite;
+  animation: cirkle-orbFloat 6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .cirkle-orb-float,
+  .cirkle-splash-in,
+  .cirkle-pulse-glow,
   .cirkle-breathe {
     animation: none;
   }
