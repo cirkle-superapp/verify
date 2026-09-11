@@ -28,6 +28,10 @@ export function DocCaptureStep() {
     if (!allReady) return;
     if (docLoading) return;
     let cancelled = false;
+    // AbortController with 120s timeout — prevents Safari from dropping
+    // long-running fetches with "Load failed"
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
     (async () => {
       setDocLoading(true);
       setError(null);
@@ -40,6 +44,7 @@ export function DocCaptureStep() {
             backImage: needsBack ? docBack : null,
             docType,
           }),
+          signal: controller.signal,
         });
         const json = await res.json();
         if (cancelled) return;
@@ -61,16 +66,23 @@ export function DocCaptureStep() {
         toast.success("Document data extracted");
         goNext();
       } catch (e: any) {
-        if (!cancelled) {
+        if (cancelled) return;
+        // Distinguish abort/timeout from other errors
+        if (e?.name === "AbortError") {
+          setError("The request timed out after 2 minutes. Please try again with a smaller photo.");
+        } else {
           setError(e?.message || "Failed to read document. Please retake the photo.");
-          toast.error("Could not read document — try retaking.");
         }
+        toast.error("Could not read document — try retaking.");
       } finally {
+        clearTimeout(timeoutId);
         if (!cancelled) setDocLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [allReady]);
 

@@ -17,8 +17,15 @@ interface FileUploadProps {
 }
 
 /** Resize & compress an uploaded image file to a JPEG data URL.
- *  Allows LARGE photos through (up to ~1.8MB) so users aren't blocked.
- *  The server-side VLM service further normalizes if the AI rejects an image.
+ *
+ * IMPORTANT: Uses URL.createObjectURL() instead of FileReader.readAsDataURL()
+ * to avoid Safari's "The string did not match the expected pattern" error
+ * which occurs when the base64 data URL exceeds Safari's ~2MB limit.
+ * Large screenshots (3-5MB PNGs) produce 4-7MB base64 strings that
+ * Safari refuses to assign to img.src.
+ *
+ * Blob URLs have no size limit, so we load the image from a blob URL,
+ * draw to canvas, then compress to a small JPEG data URL for the API.
  */
 function fileToCompressedDataUrl(
   file: File,
@@ -27,65 +34,67 @@ function fileToCompressedDataUrl(
   maxBytes = 1800 * 1024 // ~1.8MB — allows large high-quality photos
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () =>
-        reject(
-          new Error(
-            "Could not decode this image. If it's a HEIC photo from an iPhone, please convert it to JPG first."
-          )
-        );
-      img.onload = () => {
-        let { width, height } = img;
-        // Only downscale if truly huge (>2200px). Otherwise keep original resolution
-        // so OCR has maximum detail to work with.
-        const HARD_MAX = 2200;
-        if (width > HARD_MAX || height > HARD_MAX) {
-          if (width >= height) {
-            height = Math.round((height * HARD_MAX) / width);
-            width = HARD_MAX;
-          } else {
-            width = Math.round((width * HARD_MAX) / height);
-            height = HARD_MAX;
-          }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas error"));
-        ctx.drawImage(img, 0, 0, width, height);
+    // Use createObjectURL instead of readAsDataURL — no size limit
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    let cleanup = () => { URL.revokeObjectURL(blobUrl); };
 
-        // Iteratively lower quality to hit the byte budget.
-        let quality = initialQuality;
-        let dataUrl = canvas.toDataURL("image/jpeg", quality);
-        while (dataUrl.length > maxBytes * 1.37 && quality > 0.45) {
-          quality = Math.max(0.45, quality - 0.1);
-          dataUrl = canvas.toDataURL("image/jpeg", quality);
-        }
-
-        // If still too big, downscale the canvas and retry.
-        let scale = 1;
-        while (dataUrl.length > maxBytes * 1.37 && scale > 0.5) {
-          scale = Math.round(scale * 0.85 * 10) / 10;
-          const sw = Math.max(1, Math.round(width * scale));
-          const sh = Math.max(1, Math.round(height * scale));
-          const c2 = document.createElement("canvas");
-          c2.width = sw;
-          c2.height = sh;
-          const cx2 = c2.getContext("2d");
-          if (!cx2) break;
-          cx2.drawImage(img, 0, 0, sw, sh);
-          dataUrl = c2.toDataURL("image/jpeg", Math.max(0.55, quality));
-        }
-
-        resolve(dataUrl);
-      };
-      img.src = reader.result as string;
+    img.onerror = () => {
+      cleanup();
+      reject(
+        new Error(
+          "Could not decode this image. If it's a HEIC photo from an iPhone, please convert it to JPG first."
+        )
+      );
     };
-    reader.readAsDataURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      // Only downscale if truly huge (>2200px). Otherwise keep original resolution
+      const HARD_MAX = 2200;
+      if (width > HARD_MAX || height > HARD_MAX) {
+        if (width >= height) {
+          height = Math.round((height * HARD_MAX) / width);
+          width = HARD_MAX;
+        } else {
+          width = Math.round((width * HARD_MAX) / height);
+          height = HARD_MAX;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { cleanup(); return reject(new Error("Canvas error")); }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Iteratively lower quality to hit the byte budget.
+      let quality = initialQuality;
+      let dataUrl = canvas.toDataURL("image/jpeg", quality);
+      while (dataUrl.length > maxBytes * 1.37 && quality > 0.45) {
+        quality = Math.max(0.45, quality - 0.1);
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+      }
+
+      // If still too big, downscale the canvas and retry.
+      let scale = 1;
+      while (dataUrl.length > maxBytes * 1.37 && scale > 0.5) {
+        scale = Math.round(scale * 0.85 * 10) / 10;
+        const sw = Math.max(1, Math.round(width * scale));
+        const sh = Math.max(1, Math.round(height * scale));
+        const c2 = document.createElement("canvas");
+        c2.width = sw;
+        c2.height = sh;
+        const cx2 = c2.getContext("2d");
+        if (!cx2) break;
+        cx2.drawImage(img, 0, 0, sw, sh);
+        dataUrl = c2.toDataURL("image/jpeg", Math.max(0.55, quality));
+      }
+
+      cleanup();
+      resolve(dataUrl);
+    };
+    // Load from blob URL — no Safari data URL size limit
+    img.src = blobUrl;
   });
 }
 
