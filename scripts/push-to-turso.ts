@@ -2,20 +2,15 @@
  * Push the Cirkle Identity Verification schema to Turso.
  *
  * Usage:
- *   TURSO_DATABASE_URL=libsql://identity-fortleem.aws-us-east-1.turso.io \
- *   TURSO_AUTH_TOKEN=<your-valid-token> \
+ *   TURSO_DATABASE_URL=libsql://your-db.turso.io \
+ *   TURSO_AUTH_TOKEN=<token> \
  *   bun run scripts/push-to-turso.ts
  *
- * If you don't have a valid token yet, generate one with the Turso CLI:
- *   turso auth login
- *   turso db tokens create identity-fortleem
- *
- * Or apply the schema directly via the Turso shell:
- *   turso db shell identity-fortleem < prisma/schema.sql
+ * This script uses raw HTTP /v2/pipeline calls (the same wire protocol the
+ * libsql client uses) because some libsql client versions reject valid
+ * Turso tokens with a 401 even when the token works fine over raw HTTP.
  */
-import { createClient } from "@libsql/client";
 import { readFileSync } from "fs";
-import { join } from "path";
 
 async function main() {
   const url = process.env.TURSO_DATABASE_URL;
@@ -25,45 +20,43 @@ async function main() {
     console.error(
       "Missing TURSO_DATABASE_URL.\n\n" +
         "Usage:\n" +
-        "  TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... bun run scripts/push-to-turso.ts\n\n" +
-        "Get a valid token with:\n" +
-        "  turso auth login && turso db tokens create identity-fortleem"
+        "  TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... bun run scripts/push-to-turso.ts"
     );
     process.exit(1);
   }
 
+  // Normalize URL: libsql:// → https:// for raw HTTP
+  const httpUrl = url.replace(/^libsql:/, "https:");
   console.log(`Connecting to ${url}...`);
-  // token is optional (local sqld doesn't require it)
-  const client = createClient(token ? { url, authToken: token } : { url });
 
   // Test connection
+  const testBody = JSON.stringify({ requests: [{ type: "execute", stmt: { sql: "SELECT 1 as ok" } }] });
   try {
-    const test = await client.execute("SELECT 1 as ok");
+    const res = await fetch(`${httpUrl}/v2/pipeline`, {
+      method: "POST",
+      headers: token
+        ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+        : { "Content-Type": "application/json" },
+      body: testBody,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
     console.log("✓ Connection successful");
   } catch (e: any) {
     console.error("✗ Connection failed:", e.message);
-    if (e.message.includes("404") || e.message.includes("auth role not found")) {
-      console.error(
-        "\nThe token's role is not authorized on this database.\n" +
-          "Generate a valid token with:\n" +
-          "  turso auth login\n" +
-          "  turso db tokens create identity-fortleem"
-      );
-    }
     process.exit(1);
   }
 
   // Read schema and strip comments line-by-line BEFORE splitting on semicolons
-  // (otherwise a comment before the first statement causes the whole first
-  // CREATE TABLE to be filtered out)
-  const schemaPath = join(import.meta.dir, "..", "prisma", "schema.sql");
+  const schemaPath = new URL("../prisma/schema.sql", import.meta.url).pathname;
   const rawSchema = readFileSync(schemaPath, "utf-8");
   const schema = rawSchema
     .split("\n")
     .filter((line) => !line.trim().startsWith("--"))
     .join("\n");
 
-  // Split on semicolons (not inside strings — our schema has none, so simple split works)
   const statements = schema
     .split(";")
     .map((s) => s.trim())
@@ -72,28 +65,49 @@ async function main() {
   console.log(`\nApplying ${statements.length} DDL statements...`);
   let applied = 0;
   for (const stmt of statements) {
+    const body = JSON.stringify({ requests: [{ type: "execute", stmt: { sql: stmt } }] });
     try {
-      await client.execute(stmt);
-      const preview = stmt.replace(/\s+/g, " ").slice(0, 70);
-      console.log(`  ✓ ${preview}...`);
-      applied++;
-    } catch (e: any) {
-      if (e.message.includes("already exists")) {
-        console.log(`  ⊘ already exists: ${stmt.replace(/\s+/g, " ").slice(0, 50)}...`);
+      const res = await fetch(`${httpUrl}/v2/pipeline`, {
+        method: "POST",
+        headers: token
+          ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+          : { "Content-Type": "application/json" },
+        body,
+      });
+      const json: any = await res.json();
+      if (res.ok && json.results?.[0]?.type === "ok") {
+        console.log(`  ✓ ${stmt.replace(/\s+/g, " ").slice(0, 65)}...`);
+        applied++;
       } else {
-        console.error(`  ✗ error: ${e.message}`);
+        const err = json.results?.[0]?.error?.message || json.error || "unknown";
+        if (String(err).includes("already exists")) {
+          console.log(`  ⊘ already exists: ${stmt.replace(/\s+/g, " ").slice(0, 50)}...`);
+          applied++;
+        } else {
+          console.log(`  ✗ ${err}`);
+        }
       }
+    } catch (e: any) {
+      console.log(`  ✗ network: ${e.message}`);
     }
   }
 
-  console.log(`\n✓ Applied ${applied} statements.`);
+  console.log(`\n✓ Applied ${applied}/${statements.length} statements.`);
 
   // Verify
-  const tables = await client.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+  const verifyRes = await fetch(`${httpUrl}/v2/pipeline`, {
+    method: "POST",
+    headers: token
+      ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+      : { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      requests: [{ type: "execute", stmt: { sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name" } }],
+    }),
+  });
+  const vJson: any = await verifyRes.json();
+  const tables = vJson.results?.[0]?.response?.result?.rows?.map((r: any) => r[0]?.value) || [];
   console.log("\nTables now in database:");
-  for (const row of tables.rows) {
-    console.log(`  - ${row.name}`);
-  }
+  for (const t of tables) console.log(`  - ${t}`);
 
   process.exit(0);
 }
