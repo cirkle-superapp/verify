@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import type { DocType, ExtractedDocumentData, FaceMatchResult, LivenessAction, LivenessResult, VerificationStatus } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // GET /api/verify/records — list all
 export async function GET() {
@@ -54,6 +55,12 @@ export async function POST(req: NextRequest) {
       (!liveness || liveness.isLive);
     status = allPassed ? "verified" : notes.length > 0 ? "failed" : "pending";
 
+    // IMPORTANT: Do NOT store raw liveness frames in the DB.
+    // 15 frames × ~50KB each = ~750KB of base64 per row, which combined with
+    // doc + selfie images made the INSERT fail (payload too large / timeout).
+    // Instead, store only the count and the list of actions performed.
+    const livenessFrameCount = livenessFrames.length;
+
     const created = await db.verification.create({
       data: {
         docType,
@@ -76,7 +83,8 @@ export async function POST(req: NextRequest) {
         imageQuality,
         fieldConfidence,
         selfieImage,
-        livenessFrames: livenessFrames.length ? JSON.stringify(livenessFrames) : null,
+        // Store only metadata, not the raw frames:
+        livenessFrames: JSON.stringify({ count: livenessFrameCount, note: "frames analyzed live, not persisted" }),
         livenessActions: livenessActions.length ? JSON.stringify(livenessActions) : null,
         docConfidence,
         faceMatchScore,
@@ -89,6 +97,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ record: created });
   } catch (e: any) {
     console.error("[/api/verify/records POST] error", e);
-    return NextResponse.json({ error: e?.message || "DB error" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || "Failed to save verification record", code: "save_failed" },
+      { status: 500 }
+    );
   }
 }

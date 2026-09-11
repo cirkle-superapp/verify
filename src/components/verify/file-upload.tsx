@@ -17,15 +17,14 @@ interface FileUploadProps {
 }
 
 /** Resize & compress an uploaded image file to a JPEG data URL.
- *  Enforces BOTH a max pixel dimension AND a max byte size, iteratively
- *  lowering quality. This prevents the VLM API from rejecting large phone
- *  photos with error code 1210.
+ *  Allows LARGE photos through (up to ~1.8MB) so users aren't blocked.
+ *  The server-side VLM service further normalizes if the AI rejects an image.
  */
 function fileToCompressedDataUrl(
   file: File,
-  maxSize = 1280,
-  initialQuality = 0.8,
-  maxBytes = 700 * 1024 // ~700KB target
+  maxSize = 1600,
+  initialQuality = 0.85,
+  maxBytes = 1800 * 1024 // ~1.8MB — allows large high-quality photos
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -40,13 +39,16 @@ function fileToCompressedDataUrl(
         );
       img.onload = () => {
         let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
+        // Only downscale if truly huge (>2200px). Otherwise keep original resolution
+        // so OCR has maximum detail to work with.
+        const HARD_MAX = 2200;
+        if (width > HARD_MAX || height > HARD_MAX) {
           if (width >= height) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
+            height = Math.round((height * HARD_MAX) / width);
+            width = HARD_MAX;
           } else {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
+            width = Math.round((width * HARD_MAX) / height);
+            height = HARD_MAX;
           }
         }
         const canvas = document.createElement("canvas");
@@ -59,15 +61,15 @@ function fileToCompressedDataUrl(
         // Iteratively lower quality to hit the byte budget.
         let quality = initialQuality;
         let dataUrl = canvas.toDataURL("image/jpeg", quality);
-        while (dataUrl.length > maxBytes * 1.37 && quality > 0.35) {
-          quality = Math.max(0.35, quality - 0.15);
+        while (dataUrl.length > maxBytes * 1.37 && quality > 0.45) {
+          quality = Math.max(0.45, quality - 0.1);
           dataUrl = canvas.toDataURL("image/jpeg", quality);
         }
 
         // If still too big, downscale the canvas and retry.
         let scale = 1;
-        while (dataUrl.length > maxBytes * 1.37 && scale > 0.4) {
-          scale = Math.round(scale * 0.8 * 10) / 10;
+        while (dataUrl.length > maxBytes * 1.37 && scale > 0.5) {
+          scale = Math.round(scale * 0.85 * 10) / 10;
           const sw = Math.max(1, Math.round(width * scale));
           const sh = Math.max(1, Math.round(height * scale));
           const c2 = document.createElement("canvas");
@@ -76,7 +78,7 @@ function fileToCompressedDataUrl(
           const cx2 = c2.getContext("2d");
           if (!cx2) break;
           cx2.drawImage(img, 0, 0, sw, sh);
-          dataUrl = c2.toDataURL("image/jpeg", Math.max(0.5, quality));
+          dataUrl = c2.toDataURL("image/jpeg", Math.max(0.55, quality));
         }
 
         resolve(dataUrl);

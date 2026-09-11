@@ -146,3 +146,52 @@ Stage Summary:
 - Uploading Egyptian ID (or any document) no longer fails with the cryptic "string did not match" error.
 - Large phone photos, HEIC images, and oversized JPEGs are now auto-compressed client-side AND server-side with sharp, with automatic VLM retry.
 - If extraction genuinely can't succeed, users now see a clear, actionable message ("try a clearer JPG/PNG photo") instead of a cryptic error.
+
+---
+Task ID: 13
+Agent: main
+Task: Allow large pictures + fix record not saving to DB after verification.
+
+Root cause found:
+- The records POST route stored ALL liveness frames (15 × ~50KB = ~750KB) + doc images + selfie as base64 in a single SQLite row. The total payload (2-4MB) caused the INSERT to fail silently.
+- The result UI showed "Verified" based on local state (`passed` flag), not on whether the DB save succeeded — so users saw "Verified" even when the record was never saved.
+- The client file-upload compressed images to only ~700KB, which over-rejected large photos.
+
+Fixes:
+
+1. Allow large pictures (file-upload.tsx):
+   - Raised maxBytes from 700KB → 1.8MB.
+   - Raised maxSize from 1280px → 1600px (with a hard cap at 2200px for truly huge phone photos).
+   - Quality floor raised from 0.35 → 0.45 (less aggressive degradation).
+   - Downscale floor raised from 0.4 → 0.5.
+   - Large high-quality photos now pass through; the server-side VLM service already handles normalization + retry on 1210 errors.
+
+2. Stop storing raw liveness frames (records/route.ts):
+   - Previously: `livenessFrames: JSON.stringify(livenessFrames)` stored all ~15 base64 frames (~750KB).
+   - Now: `livenessFrames: JSON.stringify({ count, note })` stores only the frame count.
+   - The frames are only needed for the live VLM analysis, NOT for history. The liveness result (score, isLive, detectedActions) is still stored.
+   - Added `export const maxDuration = 60` to the route.
+   - Better error response with `code: "save_failed"`.
+
+3. Result UI properly reflects save status (result-step.tsx REWRITE):
+   - Added `saveError` state and `saveRecord` callback.
+   - Three visible states with badges:
+     • "Saving to database…" (amber spinner badge)
+     • "Saved · ID xxxxx" (green badge with last 8 chars of record ID)
+     • "Not saved" (red badge)
+   - If save fails: red Alert with "Record not saved" + a "Retry save" button.
+   - "New verification" + "View history" buttons only appear AFTER the record is saved.
+   - The "Verified"/"Failed" heading still shows based on checks, but the save status is clearly visible.
+
+Verification (Agent Browser + direct API test):
+- Direct API test: POST with realistic payload (doc images + selfie + 15 frames + liveness result) → 200 in 27ms, record saved, status "verified", docImageFront stored ✓.
+- Full browser flow: passport upload → extraction → review → selfie → face match → liveness → result → record SAVED ("Saved · ID" badge shown).
+- History view shows the new record at the top.
+- DB now has 3 verification records (was failing to save before).
+- Lint: 0 errors.
+
+Stage Summary:
+- Large photos (up to ~1.8MB, 2200px) are now accepted.
+- Verification records are reliably saved to the database after the full flow (including live motion).
+- The result page clearly shows save status (Saving / Saved / Not saved) with a retry button if the save fails.
+- History view shows all saved records with images.

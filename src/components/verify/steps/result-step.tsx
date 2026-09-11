@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, Download, FileText } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { useVerificationStore } from "@/lib/verification-store";
 import { ScoreBadge, StatusBadge } from "@/components/verify/score-badge";
@@ -28,44 +29,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
     reset,
   } = useVerificationStore();
   const meta = DOC_TYPES.find((d) => d.id === docType)!;
-
-  useEffect(() => {
-    if (recordId || isSubmitting) return;
-    let cancelled = false;
-    (async () => {
-      setSubmitting(true);
-      try {
-        const res = await fetch("/api/verify/records", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            docType,
-            docSide: meta.needsBack ? "both" : "front",
-            docImageFront: docFront,
-            docImageBack: docBack,
-            docExtracted,
-            selfieImage: selfie,
-            livenessFrames,
-            livenessActions,
-            faceMatch,
-            liveness: livenessResult,
-          }),
-        });
-        const json = await res.json();
-        if (cancelled) return;
-        if (!res.ok) throw new Error(json.error || "Could not save record");
-        setRecordId(json.record.id);
-        toast.success("Verification record saved");
-      } catch (e: any) {
-        if (!cancelled) toast.error("Failed to save record");
-      } finally {
-        if (!cancelled) setSubmitting(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const docScore = Math.round((docExtracted?.confidence ?? 0) * 100);
   const faceScore = Math.round(faceMatch?.similarity ?? 0);
@@ -73,6 +37,49 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
   const overall = Math.round((docScore * 0.3 + faceScore * 0.4 + livenessScore * 0.3));
 
   const passed = docScore >= 60 && faceMatch?.isMatch && livenessResult?.isLive;
+
+  const saveRecord = useCallback(async () => {
+    setSubmitting(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/verify/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docType,
+          docSide: meta.needsBack ? "both" : "front",
+          docImageFront: docFront,
+          docImageBack: docBack,
+          docExtracted,
+          selfieImage: selfie,
+          livenessFrames,
+          livenessActions,
+          faceMatch,
+          liveness: livenessResult,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not save record");
+      setRecordId(json.record.id);
+      toast.success("Verification record saved to database");
+    } catch (e: any) {
+      setSaveError(e?.message || "Failed to save record");
+      toast.error("Failed to save record — click Retry");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [docType, meta.needsBack, docFront, docBack, docExtracted, selfie, livenessFrames, livenessActions, faceMatch, livenessResult, setRecordId, setSubmitting]);
+
+  // Auto-save once on mount
+  useEffect(() => {
+    if (recordId || isSubmitting) return;
+    saveRecord();
+  }, [recordId, isSubmitting, saveRecord]);
+
+  // Determine display state
+  const saved = !!recordId;
+  const saving = isSubmitting;
+  const saveFailed = !saved && !saving && !!saveError;
 
   return (
     <div className="space-y-6">
@@ -94,12 +101,39 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
         <p className="text-muted-foreground" dir="rtl" lang="ar">
           {passed ? "تم التحقق من الهوية بنجاح" : "فشل التحقق من الهوية"}
         </p>
-        {recordId && (
-          <div className="flex justify-center">
-            <StatusBadge status={passed ? "verified" : "failed"} />
-          </div>
-        )}
+        {/* Save status badge */}
+        <div className="flex justify-center">
+          {saving && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving to database…
+            </span>
+          )}
+          {saved && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              <Database className="h-3.5 w-3.5" /> Saved · ID {recordId?.slice(-8)}
+            </span>
+          )}
+          {saveFailed && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+              <AlertTriangle className="h-3.5 w-3.5" /> Not saved
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Save failure alert with retry */}
+      {saveFailed && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Record not saved</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>The verification completed but the record could not be saved to the database: {saveError}</p>
+            <Button size="sm" onClick={saveRecord}>
+              <Save className="h-4 w-4 mr-1" /> Retry save
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Overall score gauge */}
       <Card>
@@ -141,7 +175,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
             <Row label="Address" value={docExtracted?.address} />
             <Row label="Movements performed" value={`${livenessActions.length} actions`} />
             <Row label="Frames analyzed" value={`${livenessFrames.length} frames`} />
-            <Row label="Record ID" value={recordId ?? "—"} mono />
+            <Row label="Record ID" value={recordId ?? (saving ? "saving…" : "—")} mono />
           </div>
         </CardContent>
       </Card>
@@ -155,12 +189,17 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
 
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-center gap-3">
-        {isSubmitting && (
+        {saving && (
           <Button disabled>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving record…
           </Button>
         )}
-        {!isSubmitting && (
+        {saveFailed && (
+          <Button onClick={saveRecord}>
+            <Save className="h-4 w-4 mr-2" /> Retry save
+          </Button>
+        )}
+        {saved && (
           <>
             <Button onClick={reset} size="lg">
               <RotateCcw className="h-4 w-4 mr-2" /> New verification
