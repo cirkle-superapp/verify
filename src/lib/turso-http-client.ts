@@ -59,9 +59,9 @@ export class TursoHttpClient {
     if (typeof v === "string") return { type: "text", value: v };
     if (typeof v === "boolean") return { type: "integer", value: v ? "1" : "0" };
     if (typeof v === "number") {
-      // Turso v2/pipeline expects integer/float values as STRINGS, not numbers
+      // Turso v2/pipeline: integers must be strings, floats must be numbers (f64)
       if (Number.isInteger(v)) return { type: "integer", value: String(v) };
-      return { type: "float", value: String(v) };
+      return { type: "float", value: v };
     }
     if (v instanceof Date) return { type: "text", value: v.toISOString() };
     if (Buffer.isBuffer(v)) return { type: "blob", value: v.toString("base64") };
