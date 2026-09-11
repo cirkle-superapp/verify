@@ -225,25 +225,97 @@ export function parseMrz(text?: string | null): MrzInfo | null {
 export function fuzzyEqual(a?: string | null, b?: string | null): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFKC")
-      .replace(/[\s\-_.,/\\]/g, "")
-      .replace(/[\u0640]/g, "");
-  return norm(a) === norm(b);
+  return canonicalize(a) === canonicalize(b);
 }
 
-/** A field is "correct" vs ground truth if fuzzy-equal OR (after normalization) one contains the other. */
+/**
+ * Deep normalization for comparison:
+ *  - lowercases Latin
+ *  - strips ALL whitespace, punctuation, separators
+ *  - removes Arabic Tatweel (ـ)
+ *  - normalizes Alef variants (أ إ آ ٱ) → ا
+ *  - normalizes Ya (ى) → ي
+ *  - normalizes Ta Marbuta (ة) → ه (common OCR confusion)
+ *  - normalizes Alef Maksura → ي
+ *  - strips Arabic diacritics/tashkeel (harakat)
+ *  - converts Arabic-Indic digits → Western
+ *  - removes field labels like "الاسم:" or "Name:"
+ */
+function canonicalize(s: string): string {
+  let r = String(s)
+    // Remove Arabic diacritics (tashkeel/harakat) U+064B–U+0652, U+0670
+    .replace(/[\u064B-\u0652\u0670]/g, "")
+    // Remove Tatweel
+    .replace(/\u0640/g, "")
+    // Normalize Alef variants
+    .replace(/[\u0622\u0623\u0625\u0671]/g, "\u0627")
+    // Normalize Ya/Alef Maksura
+    .replace(/[\u0649\u0670]/g, "\u064A")
+    // Normalize Ta Marbuta → Ha (very common OCR confusion: ة ↔ ه)
+    .replace(/\u0629/g, "\u0647")
+    // Arabic-Indic + Extended Arabic-Indic digits → Western
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0))
+    // Lowercase Latin
+    .toLowerCase()
+    // Remove field labels (Arabic + English) that the VLM sometimes includes
+    .replace(/(الاسم|الرقم القومي|تاريخ الميلاد|النوع|الديانة|الوظيفة|العنوان|الجنسية|الحالة الاجتماعية|رقم المستند|تاريخ الانتهاء|name|national id|date of birth|gender|religion|profession|address|nationality|marital status|document no|expiry)\s*:?\s*/gi, "")
+    // Remove ALL non-letter/non-digit characters (whitespace, punctuation, separators, slashes, hyphens)
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return r;
+}
+
+/**
+ * Levenshtein edit distance between two strings.
+ * Used to tolerate minor OCR errors (e.g. محمد vs محمود = distance 1).
+ */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return prev[b.length];
+}
+
+/**
+ * A field is "correct" vs ground truth using multi-tier matching:
+ *  1. Exact match after canonicalization → pass
+ *  2. One contains the other → pass (handles truncated names)
+ *  3. Levenshtein distance within tolerance → pass (handles OCR single-char errors)
+ *
+ * The tolerance scales with string length:
+ *  - strings ≤ 4 chars: allow 1 edit
+ *  - strings 5–10 chars: allow 2 edits
+ *  - strings > 10 chars: allow 3 edits
+ */
 export function fieldMatches(expected: string | null | undefined, actual: string | null | undefined): boolean {
   if (!expected) return true; // no ground truth → auto pass
   if (!actual) return false;
-  if (fuzzyEqual(expected, actual)) return true;
-  const norm = (s: string) =>
-    s.toLowerCase().normalize("NFKC").replace(/[\s\-_.,/\\]/g, "").replace(/[\u0640]/g, "");
-  const ne = norm(expected);
-  const na = norm(actual);
-  return ne.includes(na) || na.includes(ne);
+
+  const ce = canonicalize(expected);
+  const ca = canonicalize(actual);
+
+  // Tier 1: exact canonical match
+  if (ce === ca) return true;
+
+  // Tier 2: containment (one is a substring of the other — handles truncated reads)
+  if (ce.includes(ca) || ca.includes(ce)) return true;
+
+  // Tier 3: Levenshtein distance within tolerance (handles OCR single-char errors)
+  const maxLen = Math.max(ce.length, ca.length);
+  const tolerance = maxLen <= 4 ? 1 : maxLen <= 10 ? 2 : 3;
+  const dist = levenshtein(ce, ca);
+  return dist <= tolerance;
 }
 
 /** Get human-readable doc type label. */

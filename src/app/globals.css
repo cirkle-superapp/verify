@@ -146,44 +146,19 @@
   background: oklch(0.68 0.10 180);
 }
 
-/* Cirkle animated logo keyframes */
-@keyframes cirkle-spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes cirkle-spin-rev {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
-}
-@keyframes cirkle-spin-fast {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-@keyframes cirkle-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.7; }
+/* Cirkle official logo animation — "breathe" opacity pulse
+   (from cirkleapp.vercel.app/logo.svg) */
+@keyframes cirkle-breathe {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
-.cirkle-spin-slow {
-  animation: cirkle-spin-slow 8s linear infinite;
-}
-.cirkle-spin-rev {
-  animation: cirkle-spin-rev 6s linear infinite;
-}
-.cirkle-spin-fast {
-  animation: cirkle-spin-fast 4s linear infinite;
-}
-.cirkle-pulse {
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: cirkle-pulse 2s ease-in-out infinite;
+.cirkle-breathe {
+  animation: cirkle-breathe 2.5s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cirkle-spin-slow,
-  .cirkle-spin-rev,
-  .cirkle-spin-fast,
-  .cirkle-pulse {
+  .cirkle-breathe {
     animation: none;
   }
 }

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkLiveness } from "@/lib/vlm-service";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { LivenessAction } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
+  const limited = checkRateLimit(req, { maxRequests: 10, windowMs: 60_000, prefix: "live" });
+  if (limited) return limited;
   try {
     const body = await req.json();
     const frames: string[] = body.frames;

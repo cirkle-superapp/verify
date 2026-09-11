@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractDocumentData } from "@/lib/vlm-service";
 import { normalizeForVlm, isLikelyTooLarge, parseDataUrl } from "@/lib/image-server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { DocType } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
-/**
- * Extract structured data from an Egyptian/Arabic ID document image.
- *
- * Handles the common failure modes:
- *  - Image too large / wrong format → VLM returns code 1210.
- *    We pre-normalize with sharp (resize + re-encode JPEG) and the VLM service
- *    also retries with recompression on 1210.
- *  - Image not a valid data URL → 400 with a clear message.
- *  - VLM timeout / network → 502 with a clear retry suggestion.
- */
 export async function POST(req: NextRequest) {
+  // Rate limit: 10 document extractions per minute per IP
+  const limited = checkRateLimit(req, { maxRequests: 10, windowMs: 60_000, prefix: "doc" });
+  if (limited) return limited;
+
   const startedAt = Date.now();
   try {
     const body = await req.json();
