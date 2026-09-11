@@ -1,31 +1,28 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: any | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
+function createDbClient(): any {
   const databaseUrl = process.env.DATABASE_URL;
 
-  // If the DATABASE_URL is a libsql/turso URL, use the libsql adapter.
-  // Otherwise fall back to the default SQLite provider (local dev).
+  // If DATABASE_URL is a libsql/turso URL, use our Turso HTTP shim.
+  // The @prisma/adapter-libsql has a bug where it rejects valid Turso
+  // tokens with HTTP 401. Our TursoHttpClient works correctly, so we use
+  // a Prisma-compatible shim backed by it.
   if (databaseUrl && databaseUrl.startsWith("libsql:")) {
-    const libsql = createClient({
-      url: databaseUrl,
-      authToken: process.env.DATABASE_AUTH_TOKEN,
-    });
-    const adapter = new PrismaLibSql(libsql);
-    return new PrismaClient({ adapter } as any);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tursoDb = require("@/lib/db-turso").db;
+    return tursoDb;
   }
 
-  // Local SQLite (default — no adapter needed)
+  // Local SQLite (default — Prisma with sqlite provider)
   return new PrismaClient({
     log: process.env.NODE_ENV !== "production" ? ["query"] : [],
   });
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+export const db = globalForPrisma.prisma ?? createDbClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
