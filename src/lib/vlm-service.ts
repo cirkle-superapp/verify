@@ -133,6 +133,67 @@ const DOC_LABELS: Record<DocType, string> = {
 };
 
 /* ────────────────────────────────────────────────────────────────────────────
+ * PASS 4: Arabic → English translation (using LLM, not VLM)
+ * Translates Arabic names/fields to English for cross-validation.
+ * ──────────────────────────────────────────────────────────────────────── */
+async function translateArabicToEnglish(arabicText: string): Promise<string> {
+  if (!arabicText || arabicText.trim().length === 0) return "";
+  const zai = await getZai();
+  try {
+    const response = await zai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a professional Arabic-to-English translator specializing in personal names and identity document fields. Translate the given Arabic text to English. For names, use the most common transliteration (e.g. محمد → Mohamed, أحمد → Ahmed, عبد الرحمن → Abdelrahman). Return ONLY the English translation, nothing else.",
+        },
+        { role: "user", content: arabicText },
+      ],
+      thinking: { type: "disabled" },
+    } as any);
+    return (response.choices[0]?.message?.content ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * PASS 5: English → Arabic transliteration (reverse direction)
+ * ──────────────────────────────────────────────────────────────────────── */
+async function transliterateEnglishToArabic(englishText: string): Promise<string> {
+  if (!englishText || englishText.trim().length === 0) return "";
+  const zai = await getZai();
+  try {
+    const response = await zai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a professional English-to-Arabic transliterator specializing in personal names. Transliterate the given English name to Arabic script. Use standard transliteration (e.g. Mohamed → محمد, Ahmed → أحمد). Return ONLY the Arabic text, nothing else.",
+        },
+        { role: "user", content: englishText },
+      ],
+      thinking: { type: "disabled" },
+    } as any);
+    return (response.choices[0]?.message?.content ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Check if a string contains Arabic characters */
+function containsArabic(s?: string | null): boolean {
+  if (!s) return false;
+  return /[\u0600-\u06FF\u0750-\u077F]/.test(s);
+}
+
+/** Check if a string contains Latin characters */
+function containsLatin(s?: string | null): boolean {
+  if (!s) return false;
+  return /[a-zA-Z]/.test(s);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
  * PASS 1: Image quality assessment (fast pre-check)
  * ──────────────────────────────────────────────────────────────────────── */
 export async function assessImageQuality(
@@ -355,7 +416,7 @@ export async function extractDocumentData(
     ? Math.min(avgFieldConf, 0.4 + imageQuality.overallQuality * 0.6)
     : avgFieldConf;
 
-  return {
+  const resultBase: ExtractedDocumentData = {
     fullNameAr,
     fullNameEn,
     nationalId,
@@ -391,8 +452,47 @@ export async function extractDocumentData(
       nationalIdChecksumValid: idInfo?.checksumValid,
       genderInferred: idInfo?.gender,
     },
-    passes: 3,
+    passes: 4, // now 4 passes: quality + Arabic OCR + structured + translation
   };
+
+  // ─── PASS 4: Cross-validation + translation ────────────────────────────
+  // If we have Arabic name but no English, translate it.
+  // If we have English name but no Arabic, transliterate it.
+  // Cross-validate: if both present, check they match (via reverse translation).
+  const result: ExtractedDocumentData = { ...resultBase };
+
+  // Fill missing fullNameEn by translating Arabic → English
+  if (containsArabic(result.fullNameAr) && !containsLatin(result.fullNameEn)) {
+    const translated = await translateArabicToEnglish(result.fullNameAr);
+    if (translated && containsLatin(translated)) {
+      result.fullNameEn = normalizeLatin(translated);
+    }
+  }
+  // Fill missing fullNameAr by transliterating English → Arabic
+  if (containsLatin(result.fullNameEn) && !containsArabic(result.fullNameAr)) {
+    const transliterated = await transliterateEnglishToArabic(result.fullNameEn);
+    if (transliterated && containsArabic(transliterated)) {
+      result.fullNameAr = normalizeArabic(transliterated);
+    }
+  }
+  // Cross-validate: if both present, check consistency via reverse translation
+  if (containsArabic(result.fullNameAr) && containsLatin(result.fullNameEn)) {
+    const arToEn = await translateArabicToEnglish(result.fullNameAr);
+    // Store the cross-validated translations in extraFields for audit
+    if (!result.extraFields) result.extraFields = {};
+    if (arToEn) result.extraFields["_nameEn_fromArabic"] = arToEn;
+    // If the VLM's English name doesn't match the translated Arabic, prefer the
+    // translated-from-Arabic version (Arabic is usually the primary on the card)
+    if (arToEn && containsLatin(arToEn) && result.fullNameEn) {
+      const { fieldMatches } = await import("@/lib/doc-validators");
+      if (!fieldMatches(arToEn, result.fullNameEn)) {
+        result.extraFields["_nameEn_original"] = result.fullNameEn;
+        result.fullNameEn = normalizeLatin(arToEn);
+      }
+    }
+  }
+
+  return result;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
