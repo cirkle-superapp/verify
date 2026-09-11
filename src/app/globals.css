@@ -45,74 +45,79 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  /* Cirkle brand: deep teal #1A4A5A primary, teal-green #2BB3A5 accent, warm cream #FDFCF9 bg */
-  --background: oklch(0.99 0.006 90);       /* #FDFCF9 warm cream */
-  --foreground: oklch(0.21 0.02 230);       /* dark teal-gray text */
+  --radius: 1.25rem;
+  /* Cirkle brand (from cirkleapp.vercel.app :root CSS variables):
+     --gold:   39 45% 57%  → #d1b685 (warm gold/tan) — secondary
+     --rose:   351 41% 56% → #bd616f (dusty rose) — accent
+     --teal:   195 56% 23% → #1a4b5b (deep teal) — primary
+     --cream:  40 50% 98%  → warm cream background
+     The logo gradient is gold → rose → teal. */
+  --background: oklch(0.985 0.008 70);        /* warm cream #FDFCF9-ish */
+  --foreground: oklch(0.22 0.01 60);          /* --charcoal: 60 8% 9% */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 230);
+  --card-foreground: oklch(0.22 0.01 60);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 230);
-  --primary: oklch(0.37 0.06 220);         /* #1A4A5A deep teal */
-  --primary-foreground: oklch(0.99 0.006 90);
-  --secondary: oklch(0.96 0.01 90);
-  --secondary-foreground: oklch(0.37 0.06 220);
-  --muted: oklch(0.96 0.01 90);
-  --muted-foreground: oklch(0.50 0.02 230);
-  --accent: oklch(0.68 0.10 180);           /* #2BB3A5 teal-green accent */
-  --accent-foreground: oklch(0.21 0.02 230);
+  --popover-foreground: oklch(0.22 0.01 60);
+  --primary: oklch(0.36 0.07 195);           /* --teal: 195 56% 23% = #1a4b5b */
+  --primary-foreground: oklch(0.985 0.008 70);
+  --secondary: oklch(0.75 0.07 70);          /* --gold: 39 45% 57% = #d1b685 */
+  --secondary-foreground: oklch(0.22 0.01 60);
+  --muted: oklch(0.95 0.01 70);
+  --muted-foreground: oklch(0.45 0.01 60);
+  --accent: oklch(0.58 0.10 351);            /* --rose: 351 41% 56% = #bd616f */
+  --accent-foreground: oklch(0.985 0.008 70);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.90 0.01 180);
-  --input: oklch(0.90 0.01 180);
-  --ring: oklch(0.37 0.06 220);
-  --chart-1: oklch(0.37 0.06 220);          /* teal */
-  --chart-2: oklch(0.68 0.10 180);          /* accent green */
-  --chart-3: oklch(0.60 0.12 150);          /* mint */
-  --chart-4: oklch(0.78 0.08 200);          /* light teal */
-  --chart-5: oklch(0.55 0.04 230);          /* slate teal */
+  --border: oklch(0.90 0.01 70);
+  --input: oklch(0.90 0.01 70);
+  --ring: oklch(0.36 0.07 195);              /* teal ring */
+  --chart-1: oklch(0.36 0.07 195);           /* teal */
+  --chart-2: oklch(0.75 0.07 70);            /* gold */
+  --chart-3: oklch(0.58 0.10 351);           /* rose */
+  --chart-4: oklch(0.55 0.05 211);           /* steel */
+  --chart-5: oklch(0.65 0.06 60);            /* warm */
   --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.21 0.02 230);
-  --sidebar-primary: oklch(0.37 0.06 220);
-  --sidebar-primary-foreground: oklch(0.99 0.006 90);
-  --sidebar-accent: oklch(0.96 0.01 90);
-  --sidebar-accent-foreground: oklch(0.37 0.06 220);
-  --sidebar-border: oklch(0.90 0.01 180);
-  --sidebar-ring: oklch(0.37 0.06 220);
+  --sidebar-foreground: oklch(0.22 0.01 60);
+  --sidebar-primary: oklch(0.36 0.07 195);
+  --sidebar-primary-foreground: oklch(0.985 0.008 70);
+  --sidebar-accent: oklch(0.95 0.01 70);
+  --sidebar-accent-foreground: oklch(0.36 0.07 195);
+  --sidebar-border: oklch(0.90 0.01 70);
+  --sidebar-ring: oklch(0.36 0.07 195);
 }
 
 .dark {
-  /* Cirkle dark theme: near-black #0a0a0a bg, teal accents */
-  --background: oklch(0.18 0.005 230);      /* #0a0a0a-ish dark teal-gray */
-  --foreground: oklch(0.96 0.01 90);
-  --card: oklch(0.23 0.01 230);
-  --card-foreground: oklch(0.96 0.01 90);
-  --popover: oklch(0.23 0.01 230);
-  --popover-foreground: oklch(0.96 0.01 90);
-  --primary: oklch(0.68 0.10 180);          /* accent teal-green as primary in dark */
-  --primary-foreground: oklch(0.18 0.005 230);
-  --secondary: oklch(0.28 0.01 230);
-  --secondary-foreground: oklch(0.96 0.01 90);
-  --muted: oklch(0.28 0.01 230);
-  --muted-foreground: oklch(0.68 0.01 230);
-  --accent: oklch(0.68 0.10 180);
-  --accent-foreground: oklch(0.18 0.005 230);
+  /* Cirkle dark theme: charcoal bg, gold/rose/teal accents */
+  --background: oklch(0.16 0.005 60);           /* --charcoal: 60 8% 9% */
+  --foreground: oklch(0.96 0.008 70);           /* cream text */
+  --card: oklch(0.22 0.005 60);
+  --card-foreground: oklch(0.96 0.008 70);
+  --popover: oklch(0.22 0.005 60);
+  --popover-foreground: oklch(0.96 0.008 70);
+  --primary: oklch(0.75 0.07 70);              /* gold as primary in dark */
+  --primary-foreground: oklch(0.16 0.005 60);
+  --secondary: oklch(0.28 0.01 60);
+  --secondary-foreground: oklch(0.96 0.008 70);
+  --muted: oklch(0.28 0.01 60);
+  --muted-foreground: oklch(0.68 0.01 60);
+  --accent: oklch(0.58 0.10 351);              /* rose */
+  --accent-foreground: oklch(0.96 0.008 70);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.10 180);
-  --chart-1: oklch(0.68 0.10 180);
-  --chart-2: oklch(0.60 0.12 150);
-  --chart-3: oklch(0.55 0.04 230);
-  --chart-4: oklch(0.78 0.08 200);
-  --chart-5: oklch(0.45 0.05 200);
-  --sidebar: oklch(0.23 0.01 230);
-  --sidebar-foreground: oklch(0.96 0.01 90);
-  --sidebar-primary: oklch(0.68 0.10 180);
-  --sidebar-primary-foreground: oklch(0.18 0.005 230);
-  --sidebar-accent: oklch(0.28 0.01 230);
-  --sidebar-accent-foreground: oklch(0.96 0.01 90);
+  --ring: oklch(0.75 0.07 70);                /* gold ring in dark */
+  --chart-1: oklch(0.75 0.07 70);              /* gold */
+  --chart-2: oklch(0.58 0.10 351);             /* rose */
+  --chart-3: oklch(0.45 0.07 195);             /* teal */
+  --chart-4: oklch(0.65 0.06 60);              /* warm */
+  --chart-5: oklch(0.55 0.05 211);             /* steel */
+  --sidebar: oklch(0.22 0.005 60);
+  --sidebar-foreground: oklch(0.96 0.008 70);
+  --sidebar-primary: oklch(0.75 0.07 70);
+  --sidebar-primary-foreground: oklch(0.16 0.005 60);
+  --sidebar-accent: oklch(0.28 0.01 60);
+  --sidebar-accent-foreground: oklch(0.96 0.008 70);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.68 0.10 180);
+  --sidebar-ring: oklch(0.75 0.07 70);
 }
 
 @layer base {

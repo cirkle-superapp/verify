@@ -27,9 +27,9 @@ export default function Home() {
   const [view, setView] = useState<View>("wizard");
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-teal-50/40 via-background to-background">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-muted/40 via-background to-background">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-teal-100 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
           <button
             onClick={() => {
@@ -63,7 +63,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (
-              <Card className="border-teal-100">
+              <Card className="border-border">
                 <CardContent className="p-3">
                   <StepIndicator current={step} onJump={setStep} />
                 </CardContent>
@@ -84,7 +84,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-teal-100 bg-background/80 backdrop-blur">
+      <footer className="mt-auto border-t border-border bg-background/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <CirkleLogo size={18} animated={false} />
@@ -109,7 +109,6 @@ function NavButton({ active, onClick, icon: Icon, label }: { active: boolean; on
       variant={active ? "default" : "outline"}
       size="sm"
       onClick={onClick}
-      className={active ? "bg-[#1A4A5A] hover:bg-[#1A4A5A]/90" : "border-teal-200 hover:bg-teal-50"}
     >
       <Icon className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">{label}</span>
     </Button>

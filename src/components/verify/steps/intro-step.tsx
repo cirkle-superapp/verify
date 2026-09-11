@@ -44,12 +44,12 @@ export function IntroStep() {
           <CirkleHeroLogo size={96} />
         </div>
         <div className="space-y-2">
-          <Badge variant="outline" className="bg-teal-50 text-[#1A4A5A] border-teal-200">
+          <Badge variant="outline" className="bg-muted text-primary border-border">
             <Sparkles className="h-3 w-3 mr-1" /> Zero-cost · Self-hosted KYC
           </Badge>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Cirkle Identity Verification
-            <span className="block text-[#1A4A5A] text-2xl sm:text-3xl mt-1 font-arabic" dir="rtl" lang="ar">
+            <span className="block text-primary text-2xl sm:text-3xl mt-1 font-arabic" dir="rtl" lang="ar">
               دواير للتحقق من الهوية
             </span>
           </h1>
@@ -69,15 +69,15 @@ export function IntroStep() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {FEATURES.map((f) => (
-          <Card key={f.title} className="overflow-hidden hover:shadow-md transition border-teal-100">
+          <Card key={f.title} className="overflow-hidden hover:shadow-md transition border-border">
             <CardContent className="p-5 flex items-start gap-4">
-              <div className="rounded-xl bg-teal-50 p-3 text-[#1A4A5A] shrink-0">
+              <div className="rounded-xl bg-muted p-3 text-primary shrink-0">
                 <f.icon className="h-6 w-6" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <h3 className="font-semibold">{f.title}</h3>
-                  <span className="text-sm text-[#1A4A5A] font-arabic" dir="rtl" lang="ar">{f.titleAr}</span>
+                  <span className="text-sm text-primary font-arabic" dir="rtl" lang="ar">{f.titleAr}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{f.desc}</p>
               </div>
@@ -87,7 +87,7 @@ export function IntroStep() {
       </div>
 
       <div className="flex justify-center">
-        <Button size="lg" onClick={goNext} className="px-8 bg-[#1A4A5A] hover:bg-[#1A4A5A]/90">
+        <Button size="lg" onClick={goNext} className="px-8 bg-primary hover:bg-primary/90">
           Start Verification <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </div>
