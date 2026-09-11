@@ -57,7 +57,7 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <History className="h-5 w-5 text-emerald-600" /> Verification history
+            <History className="h-5 w-5 text-teal-600" /> Verification history
           </h2>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -97,7 +97,7 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium truncate">{r.fullNameEn || r.fullNameAr || "Unknown"}</span>
                       {r.fullNameAr && (
-                        <span className="text-sm text-emerald-700 font-arabic" dir="rtl" lang="ar">{r.fullNameAr}</span>
+                        <span className="text-sm text-teal-700 font-arabic" dir="rtl" lang="ar">{r.fullNameAr}</span>
                       )}
                       <StatusBadge status={r.status} />
                     </div>

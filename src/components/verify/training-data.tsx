@@ -111,7 +111,7 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Database className="h-5 w-5 text-emerald-600" /> Training Data
+            <Database className="h-5 w-5 text-teal-600" /> Training Data
           </h2>
         </div>
         <div className="flex items-center gap-2">
@@ -133,10 +133,10 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Seed control panel */}
-      <Card className="border-emerald-100 bg-emerald-50/30">
+      <Card className="border-teal-100 bg-teal-50/30">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Beaker className="h-4 w-4 text-emerald-600" /> Synthetic sample bank
+            <Beaker className="h-4 w-4 text-teal-600" /> Synthetic sample bank
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -194,7 +194,7 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
                 )}
                 <div className="absolute top-2 right-2">
                   <Badge variant={s.source === "synthetic" ? "default" : "secondary"}
-                    className={s.source === "synthetic" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                    className={s.source === "synthetic" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700"}>
                     {s.source}
                   </Badge>
                 </div>
@@ -227,7 +227,7 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
 }
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent?: "emerald" | "amber" }) {
-  const color = accent === "emerald" ? "text-emerald-700" : accent === "amber" ? "text-amber-700" : "";
+  const color = accent === "emerald" ? "text-teal-700" : accent === "amber" ? "text-amber-700" : "";
   return (
     <Card>
       <CardContent className="p-4 text-center">

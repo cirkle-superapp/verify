@@ -21,17 +21,17 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "Live Identity Verification — Egyptian & Arabic Documents",
+  title: "Cirkle Identity Verification — Egyptian & Arabic KYC",
   description:
-    "AI-powered live identity verification: read Egyptian and Arabic documents, capture a live selfie, and prove liveness with movement challenges.",
-  keywords: ["identity verification", "KYC", "Egyptian ID", "Arabic OCR", "liveness", "face match", "VLM"],
-  authors: [{ name: "Z.ai" }],
+    "Cirkle (دواير) — AI-powered live identity verification: read Egyptian and Arabic documents, capture a live selfie, and prove liveness with movement challenges. Zero-cost, self-hosted.",
+  keywords: ["Cirkle", "دواير", "identity verification", "KYC", "Egyptian ID", "Arabic OCR", "liveness", "face match", "VLM"],
+  authors: [{ name: "Cirkle" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "Live Identity Verification",
-    description: "Read Egyptian/Arabic documents, match faces, and verify liveness.",
+    title: "Cirkle Identity Verification",
+    description: "Cirkle (دواير) — Read Egyptian/Arabic documents, match faces, and verify liveness. Zero-cost, self-hosted.",
     type: "website",
   },
 };

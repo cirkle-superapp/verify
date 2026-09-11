@@ -86,8 +86,8 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
       <div className="text-center space-y-3">
         <div className="inline-flex">
           {passed ? (
-            <div className="rounded-full bg-emerald-100 p-4">
-              <CheckCircle2 className="h-14 w-14 text-emerald-600" />
+            <div className="rounded-full bg-teal-100 p-4">
+              <CheckCircle2 className="h-14 w-14 text-teal-600" />
             </div>
           ) : (
             <div className="rounded-full bg-rose-100 p-4">
@@ -109,7 +109,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
             </span>
           )}
           {saved && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
               <Database className="h-3.5 w-3.5" /> Saved · ID {recordId?.slice(-8)}
             </span>
           )}
@@ -143,9 +143,9 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
               <div className="text-sm text-muted-foreground">Overall verification score</div>
               <div className="text-3xl font-bold">{overall}%</div>
             </div>
-            <ShieldCheck className={`h-10 w-10 ${passed ? "text-emerald-600" : "text-rose-500"}`} />
+            <ShieldCheck className={`h-10 w-10 ${passed ? "text-teal-600" : "text-rose-500"}`} />
           </div>
-          <Progress value={overall} className={`h-2.5 ${passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-rose-500"}`} />
+          <Progress value={overall} className={`h-2.5 ${passed ? "[&>div]:bg-teal-500" : "[&>div]:bg-rose-500"}`} />
         </CardContent>
       </Card>
 
@@ -160,7 +160,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="h-4 w-4 text-emerald-600" /> Verification summary
+            <FileText className="h-4 w-4 text-teal-600" /> Verification summary
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -221,11 +221,11 @@ function ScoreCard({ label, labelAr, score, threshold, desc }: { label: string; 
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">{label}</div>
-            <div className="text-xs text-emerald-700 font-arabic" dir="rtl" lang="ar">{labelAr}</div>
+            <div className="text-xs text-teal-700 font-arabic" dir="rtl" lang="ar">{labelAr}</div>
           </div>
           <ScoreBadge score={score} threshold={threshold} />
         </div>
-        <Progress value={score} className={`h-1.5 ${score >= threshold ? "[&>div]:bg-emerald-500" : "[&>div]:bg-rose-500"}`} />
+        <Progress value={score} className={`h-1.5 ${score >= threshold ? "[&>div]:bg-teal-500" : "[&>div]:bg-rose-500"}`} />
         {desc && <div className="text-xs text-muted-foreground truncate" dir="auto">{desc}</div>}
       </CardContent>
     </Card>

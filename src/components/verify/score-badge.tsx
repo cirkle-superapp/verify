@@ -16,7 +16,7 @@ export function ScoreBadge({ score, label, className, threshold = 70 }: ScoreBad
   const pass = pct >= threshold;
   const warn = pct >= threshold - 20 && !pass;
   const color = pass
-    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+    ? "text-teal-700 bg-teal-50 border-teal-200"
     : warn
     ? "text-amber-700 bg-amber-50 border-amber-200"
     : "text-rose-700 bg-rose-50 border-rose-200";
@@ -44,7 +44,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const map: Record<string, { label: string; cls: string; Icon: any }> = {
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50 border-amber-200", Icon: AlertCircle },
-    verified: { label: "Verified", cls: "text-emerald-700 bg-emerald-50 border-emerald-200", Icon: CheckCircle2 },
+    verified: { label: "Verified", cls: "text-teal-700 bg-teal-50 border-teal-200", Icon: CheckCircle2 },
     failed: { label: "Failed", cls: "text-rose-700 bg-rose-50 border-rose-200", Icon: XCircle },
     rejected: { label: "Rejected", cls: "text-rose-700 bg-rose-50 border-rose-200", Icon: XCircle },
   };

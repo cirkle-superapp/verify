@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, History, Home as HomeIcon, FlaskConical, Database } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -16,6 +16,7 @@ import { ResultStep } from "@/components/verify/steps/result-step";
 import { HistoryView } from "@/components/verify/history-view";
 import { EvaluationLab } from "@/components/verify/evaluation-lab";
 import { TrainingData } from "@/components/verify/training-data";
+import { CirkleLogo } from "@/components/brand/cirkle-logo";
 
 type View = "wizard" | "history" | "eval" | "training";
 
@@ -26,9 +27,9 @@ export default function Home() {
   const [view, setView] = useState<View>("wizard");
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-emerald-50/40 via-background to-background">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-teal-50/40 via-background to-background">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 border-b border-teal-100 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
           <button
             onClick={() => {
@@ -36,17 +37,10 @@ export default function Home() {
               setStep("intro");
               reset();
             }}
-            className="flex items-center gap-2.5 group"
+            className="group"
+            aria-label="Cirkle home"
           >
-            <div className="rounded-xl bg-emerald-600 p-1.5 text-white shadow-sm group-hover:shadow-md transition">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-sm sm:text-base leading-tight">Identity Verify</div>
-              <div className="text-[11px] text-muted-foreground leading-tight" dir="rtl" lang="ar">
-                التحقق من الهوية
-              </div>
-            </div>
+            <CirkleLogo size={36} animated showWordmark />
           </button>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
@@ -69,7 +63,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (
-              <Card className="border-emerald-100">
+              <Card className="border-teal-100">
                 <CardContent className="p-3">
                   <StepIndicator current={step} onJump={setStep} />
                 </CardContent>
@@ -90,18 +84,18 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t bg-background/80 backdrop-blur">
+      <footer className="mt-auto border-t border-teal-100 bg-background/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-            <span>AI-powered live identity verification</span>
+            <CirkleLogo size={18} animated={false} />
+            <span>Cirkle Identity Verification</span>
             <span className="hidden sm:inline">·</span>
-            <span className="hidden sm:inline font-arabic" dir="rtl" lang="ar">تحقق هوية حي بالذكاء الاصطناعي</span>
+            <span className="hidden sm:inline font-arabic" dir="rtl" lang="ar">دواير للتحقق من الهوية</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>Documents: Egyptian ID · Passport · License</span>
+            <span>Zero-cost · Self-hosted · Privacy-first</span>
             <span className="hidden md:inline">·</span>
-            <span className="hidden md:inline">Live face + movement liveness</span>
+            <span className="hidden md:inline">Egyptian ID · Passport · License</span>
           </div>
         </div>
       </footer>
@@ -111,7 +105,12 @@ export default function Home() {
 
 function NavButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: any; label: string }) {
   return (
-    <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className={active ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
+    <Button
+      variant={active ? "default" : "outline"}
+      size="sm"
+      onClick={onClick}
+      className={active ? "bg-[#1A4A5A] hover:bg-[#1A4A5A]/90" : "border-teal-200 hover:bg-teal-50"}
+    >
       <Icon className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">{label}</span>
     </Button>
   );

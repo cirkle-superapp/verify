@@ -43,15 +43,15 @@ export function DocTypeStep() {
                 }
               }}
               className={cn(
-                "cursor-pointer transition-all hover:border-emerald-400 hover:shadow-md",
-                selected && "border-emerald-500 ring-2 ring-emerald-500/30"
+                "cursor-pointer transition-all hover:border-teal-400 hover:shadow-md",
+                selected && "border-teal-500 ring-2 ring-teal-500/30"
               )}
             >
               <CardContent className="p-5 flex items-start gap-4">
                 <div
                   className={cn(
                     "rounded-xl p-3 shrink-0 transition",
-                    selected ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-600"
+                    selected ? "bg-teal-600 text-white" : "bg-teal-50 text-teal-600"
                   )}
                 >
                   <Icon className="h-7 w-7" />
@@ -59,9 +59,9 @@ export function DocTypeStep() {
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold">{d.label}</h3>
-                    {selected && <Check className="h-5 w-5 text-emerald-600" />}
+                    {selected && <Check className="h-5 w-5 text-teal-600" />}
                   </div>
-                  <div className="text-sm text-emerald-700 font-arabic" dir="rtl" lang="ar">{d.labelAr}</div>
+                  <div className="text-sm text-teal-700 font-arabic" dir="rtl" lang="ar">{d.labelAr}</div>
                   <p className="text-xs text-muted-foreground">{d.description}</p>
                   <div className="text-[11px] text-muted-foreground pt-1">
                     {d.needsBack ? "Requires front & back" : "Single side"}

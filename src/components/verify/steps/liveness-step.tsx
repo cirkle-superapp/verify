@@ -177,7 +177,7 @@ export function LivenessStep() {
           <Card>
             <CardContent className="p-5">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <Hand className="h-4 w-4 text-emerald-600" /> Movement sequence
+                <Hand className="h-4 w-4 text-teal-600" /> Movement sequence
               </h3>
               <ol className="space-y-2">
                 {livenessActions.map((a, i) => {
@@ -188,22 +188,22 @@ export function LivenessStep() {
                     <li
                       key={a}
                       className={`flex items-center gap-3 rounded-lg border p-2.5 transition ${
-                        active ? "border-emerald-500 bg-emerald-50" : done ? "border-emerald-200 bg-emerald-50/50" : "border-border"
+                        active ? "border-teal-500 bg-teal-50" : done ? "border-teal-200 bg-teal-50/50" : "border-border"
                       }`}
                     >
                       <span
                         className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                          done ? "bg-emerald-600 text-white" : active ? "bg-emerald-500 text-white animate-pulse" : "bg-muted text-muted-foreground"
+                          done ? "bg-teal-600 text-white" : active ? "bg-teal-500 text-white animate-pulse" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {done ? "✓" : i + 1}
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium">{m.label}</div>
-                        <div className="text-xs text-emerald-700 font-arabic" dir="rtl" lang="ar">{m.labelAr}</div>
+                        <div className="text-xs text-teal-700 font-arabic" dir="rtl" lang="ar">{m.labelAr}</div>
                       </div>
                       {active && (
-                        <span className="text-xs font-mono tabular-nums text-emerald-700">{Math.ceil(secondsLeft)}s</span>
+                        <span className="text-xs font-mono tabular-nums text-teal-700">{Math.ceil(secondsLeft)}s</span>
                       )}
                     </li>
                   );
@@ -220,7 +220,7 @@ export function LivenessStep() {
 
           {/* live instruction */}
           {phase === "performing" && currentMeta && (
-            <Card className="border-emerald-300">
+            <Card className="border-teal-300">
               <CardContent className="p-5 text-center">
                 <div className="text-lg font-bold" dir="rtl" lang="ar">{currentMeta.instructionAr}</div>
                 <div className="text-sm text-muted-foreground">{currentMeta.instruction}</div>
@@ -233,7 +233,7 @@ export function LivenessStep() {
             <Card>
               <CardContent className="p-5 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
                   Analyzing captured frames for liveness…
                 </div>
                 <Progress value={80} className="h-1.5" />
@@ -246,7 +246,7 @@ export function LivenessStep() {
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-center gap-3">
                   {livenessResult.isLive ? (
-                    <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+                    <CheckCircle2 className="h-10 w-10 text-teal-600" />
                   ) : (
                     <XCircle className="h-10 w-10 text-rose-600" />
                   )}
@@ -263,7 +263,7 @@ export function LivenessStep() {
                     {livenessResult.detectedActions.map((a) => {
                       const m = LIVENESS_ACTIONS.find((x) => x.id === a);
                       return m ? (
-                        <span key={a} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+                        <span key={a} className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs text-teal-700">
                           <CheckCircle2 className="h-3 w-3" /> {m.label}
                         </span>
                       ) : null;

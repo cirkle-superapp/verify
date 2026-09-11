@@ -28,7 +28,7 @@ export function StepIndicator({ current, onJump }: StepIndicatorProps) {
                 className={cn(
                   "flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium transition",
                   active && "bg-primary text-primary-foreground",
-                  done && "bg-emerald-50 text-emerald-700 border border-emerald-200",
+                  done && "bg-teal-50 text-teal-700 border border-teal-200",
                   !active && !done && "text-muted-foreground",
                   reachable && onJump ? "cursor-pointer hover:opacity-80" : "cursor-default"
                 )}
@@ -37,7 +37,7 @@ export function StepIndicator({ current, onJump }: StepIndicatorProps) {
                   className={cn(
                     "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
                     active && "bg-primary-foreground/20",
-                    done && "bg-emerald-600 text-white",
+                    done && "bg-teal-600 text-white",
                     !active && !done && "bg-muted text-muted-foreground"
                   )}
                 >
@@ -50,7 +50,7 @@ export function StepIndicator({ current, onJump }: StepIndicatorProps) {
                 <div
                   className={cn(
                     "mx-0.5 h-px w-4 sm:w-8",
-                    done ? "bg-emerald-400" : "bg-border"
+                    done ? "bg-teal-400" : "bg-border"
                   )}
                 />
               )}

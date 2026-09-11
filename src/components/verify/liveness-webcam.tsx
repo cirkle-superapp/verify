@@ -158,7 +158,7 @@ export function LivenessWebcam({
         )}
 
         {phase === "done" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-emerald-600/80 text-white font-semibold">
+          <div className="absolute inset-0 flex items-center justify-center bg-teal-600/80 text-white font-semibold">
             Done capturing frames
           </div>
         )}

@@ -37,10 +37,10 @@ function FieldRow({
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
           {labelAr && (
-            <span className="text-xs text-emerald-700 font-arabic" dir="rtl" lang="ar">{labelAr}</span>
+            <span className="text-xs text-teal-700 font-arabic" dir="rtl" lang="ar">{labelAr}</span>
           )}
           {confPct !== null && (
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${confPct >= 70 ? "bg-emerald-100 text-emerald-700" : confPct >= 40 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${confPct >= 70 ? "bg-teal-100 text-teal-700" : confPct >= 40 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
               {confPct}%
             </span>
           )}
@@ -124,12 +124,12 @@ export function DocReviewStep() {
         <div className="text-sm">
           <span className="text-muted-foreground">Document:</span>{" "}
           <span className="font-medium">{meta.label}</span>
-          <span className="text-emerald-700 font-arabic ml-2" dir="rtl" lang="ar">{meta.labelAr}</span>
+          <span className="text-teal-700 font-arabic ml-2" dir="rtl" lang="ar">{meta.labelAr}</span>
           {extracted?.passes && (
             <Badge variant="outline" className="ml-2 text-[10px]">{extracted.passes}-pass OCR</Badge>
           )}
           {extracted?.mrzParsed && (
-            <Badge variant="outline" className="ml-1 text-[10px] bg-emerald-50 text-emerald-700">MRZ parsed</Badge>
+            <Badge variant="outline" className="ml-1 text-[10px] bg-teal-50 text-teal-700">MRZ parsed</Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -149,10 +149,10 @@ export function DocReviewStep() {
 
       {/* Image quality assessment panel */}
       {extracted?.imageQuality && (
-        <Card className={extracted.imageQuality.overallQuality < 0.5 ? "border-amber-300 bg-amber-50/30" : "border-emerald-100"}>
+        <Card className={extracted.imageQuality.overallQuality < 0.5 ? "border-amber-300 bg-amber-50/30" : "border-teal-100"}>
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <div className={`rounded-md p-2 ${extracted.imageQuality.overallQuality >= 0.7 ? "bg-emerald-100 text-emerald-700" : extracted.imageQuality.overallQuality >= 0.4 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+              <div className={`rounded-md p-2 ${extracted.imageQuality.overallQuality >= 0.7 ? "bg-teal-100 text-teal-700" : extracted.imageQuality.overallQuality >= 0.4 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
                 {extracted.imageQuality.overallQuality >= 0.7 ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
               </div>
               <div className="flex-1 space-y-2">
@@ -192,21 +192,21 @@ export function DocReviewStep() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <ShieldCheck className="h-4 w-4 text-teal-600" />
               <span className="font-semibold text-sm">Field validation</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               {extracted.validationFlags.nationalIdValid !== undefined && (
                 <div className="flex items-center gap-2">
                   {extracted.validationFlags.nationalIdValid ?
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" /> :
+                    <CheckCircle2 className="h-4 w-4 text-teal-600" /> :
                     <AlertTriangle className="h-4 w-4 text-amber-500" />}
                   <span>National ID: {extracted.validationFlags.nationalIdChecksumValid ? "valid checksum ✓" : extracted.validationFlags.nationalIdValid ? "format valid, checksum weak" : "invalid format"}</span>
                 </div>
               )}
               {extracted.validationFlags.genderInferred && (
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <CheckCircle2 className="h-4 w-4 text-teal-600" />
                   <span>Gender inferred from NID: {extracted.validationFlags.genderInferred}</span>
                 </div>
               )}
@@ -220,7 +220,7 @@ export function DocReviewStep() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <ImageIcon className="h-4 w-4 text-emerald-600" /> Document image
+              <ImageIcon className="h-4 w-4 text-teal-600" /> Document image
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -249,7 +249,7 @@ export function DocReviewStep() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4 text-emerald-600" /> Extracted fields
+              <FileText className="h-4 w-4 text-teal-600" /> Extracted fields
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -287,11 +287,11 @@ export function DocReviewStep() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4 text-emerald-600" /> Arabic OCR pass (raw)
+              <FileText className="h-4 w-4 text-teal-600" /> Arabic OCR pass (raw)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="max-h-40 overflow-y-auto rounded-md bg-emerald-50/40 p-3 text-xs whitespace-pre-wrap break-words font-arabic" dir="auto" lang="ar">
+            <pre className="max-h-40 overflow-y-auto rounded-md bg-teal-50/40 p-3 text-xs whitespace-pre-wrap break-words font-arabic" dir="auto" lang="ar">
               {extracted.arabicText}
             </pre>
           </CardContent>

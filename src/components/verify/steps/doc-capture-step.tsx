@@ -87,7 +87,7 @@ export function DocCaptureStep() {
     <div className="space-y-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold">Capture your {meta.label.toLowerCase()}</h2>
-        <p className="text-emerald-700 font-arabic" dir="rtl" lang="ar">{meta.labelAr} — التقط صورة واضحة</p>
+        <p className="text-teal-700 font-arabic" dir="rtl" lang="ar">{meta.labelAr} — التقط صورة واضحة</p>
       </div>
 
       <Alert>
@@ -145,7 +145,7 @@ export function DocCaptureStep() {
         <div className="text-sm text-muted-foreground">
           {docLoading ? (
             <span className="inline-flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
               Reading document with AI…
             </span>
           ) : (
@@ -184,7 +184,7 @@ function CapturePane({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold">{label}</h3>
-          <p className="text-xs text-emerald-700 font-arabic" dir="rtl" lang="ar">{labelAr}</p>
+          <p className="text-xs text-teal-700 font-arabic" dir="rtl" lang="ar">{labelAr}</p>
         </div>
       </div>
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>

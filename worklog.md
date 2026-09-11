@@ -195,3 +195,86 @@ Stage Summary:
 - Verification records are reliably saved to the database after the full flow (including live motion).
 - The result page clearly shows save status (Saving / Saved / Not saved) with a retry button if the save fails.
 - History view shows all saved records with images.
+
+---
+Task ID: 14
+Agent: main (COO + PM role)
+Task: Rebrand to Cirkle + competitor research + zero-cost tech audit + full stress test.
+
+SECURITY NOTE: User shared GitHub + Vercel tokens in chat. Did NOT use them (credentials in chat logs are a risk). Recommended rotation.
+
+BRAND RESEARCH (cirkleapp.vercel.app public site):
+- Name: Cirkle (دواير) — "circles"; "A New Social Operating System" / AI-native super app
+- Theme color: #1A4A5A (deep teal)
+- Light bg: #FDFCF9 (warm cream)
+- Dark bg: #0a0a0a
+- Built as animated 3-ring concentric logo (outer/middle/inner rings rotate at different speeds + center pulse) — evokes "Cirkle/دواير".
+
+REBRANDING DONE:
+- Created src/components/brand/cirkle-logo.tsx: CirkleMark (3 rotating SVG rings), CirkleLogo (mark + wordmark), CirkleHeroLogo (large with glow). Animations: cirkle-spin-slow (8s), cirkle-spin-rev (6s), cirkle-spin-fast (4s), cirkle-pulse (2s). Respects prefers-reduced-motion.
+- globals.css: replaced emerald theme → Cirkle teal theme. Primary oklch(0.37 0.06 220)=#1A4A5A, accent oklch(0.68 0.10 180)=#2BB3A5, bg oklch(0.99 0.006 90)=#FDFCF9 cream. Dark mode: #0a0a0a bg with teal accents. Custom scrollbar now teal.
+- layout.tsx: metadata title → "Cirkle Identity Verification — Egyptian & Arabic KYC", description mentions Cirkle (دواير).
+- page.tsx: header uses CirkleLogo (animated, with wordmark), nav buttons use #1A4A5A bg, footer has Cirkle logo + "Cirkle Identity Verification · دواير للتحقق من الهوية · Zero-cost · Self-hosted · Privacy-first".
+- intro-step.tsx: CirkleHeroLogo (96px, glow), "Cirkle Identity Verification دواير للتحقق من الهوية" heading, badges for 3-pass OCR / VLM face match / liveness / ID checksum.
+- Swept all emerald-* → teal-* across 12 component files.
+
+COMPETITOR PRICING (researched via web search):
+- Veriff: $0.80/check, $49/mo min
+- Sumsub: $1.35-$1.85/check, $149/mo min
+- Onfido: $1.50-$3.50/check
+- Jumio: $2-5/check
+- Didit: free core KYC (closest zero-cost competitor)
+=> At 10k checks/month, competitors cost $8k-$50k/mo. Cirkle: $0 (just hosting).
+
+ZERO-COST TECH STACK (all already in use, $0 billing):
+- Frontend: Next.js 16, React 19, Tailwind 4, shadcn/ui (MIT) — $0
+- AI Vision: z-ai-web-dev-sdk VLM (included, no per-check billing) — $0
+- Webcam: native getUserMedia API — $0
+- Image processing: sharp (Apache-2.0) + canvas — $0
+- DB: Prisma + SQLite — $0
+- Hosting: can deploy to Vercel free tier or any Node host — $0
+- Auth: NextAuth.js available if needed — $0
+- Charts: recharts (MIT) — $0
+
+Alternative free libs available if VLM ever drops:
+- face-api.js (TensorFlow.js) — free face detection/recognition in-browser
+- Tesseract.js — free OCR including Arabic
+- MediaPipe Face Mesh — free real-time face landmarks (better liveness)
+
+STRESS TEST RESULTS (6 synthetic samples, 3-pass VLM each, concurrency 2):
+Run: "Stress test 9/11/2026 7:54:31 PM" — Status: completed
+- Samples processed: 6/6 (no errors)
+- Overall field accuracy: 78.2%
+- Avg response time: 22.9s per sample (3 VLM passes)
+- Avg image quality: 87.5%
+- Passed (all fields correct): 0/6
+
+Per-field accuracy:
+- National ID:   6/6 (100%) ✓ excellent — Egyptian ID checksum validation works
+- Birth date:   6/6 (100%) ✓ excellent
+- Gender:       6/6 (100%) ✓ excellent
+- Expiry date:  6/6 (100%) ✓ excellent
+- Document No: 4/6 (67%) — 2 misses on samples 3 & 5
+- Name (En):    5/6 (83%) — 1 miss on sample 6
+- Name (Ar):    0/6 (0%) ✗ CRITICAL GAP — Arabic name never matched ground truth
+
+Per-sample (Name Ar | Name En | NID | DocNo | DOB | Gender | Expiry | Time | Conf | Pass):
+S1: ✗ ✓ ✓ ✓ ✓ ✓ ✓ | 18.1s | 88% | FAIL
+S2: ✗ ✓ ✓ ✓ ✓ ✓ ✓ | 19.0s | 91% | FAIL
+S3: ✗ ✓ ✓ ✗ ✓ ✓ ✓ | 21.3s | 74% | FAIL
+S4: ✗ ✓ ✓ ✓ ✓ ✓ ✓ | 38.5s | 61% | FAIL
+S5: ✗ ✓ ✓ ✗ ✓ ✓ ✓ | 22.5s | 81% | FAIL
+S6: ✗ ✗ ✓ ✓ ✓ ✓ ✓ | 18.1s | 82% | FAIL
+
+HONEST AUDIT:
+Strengths: numeric/date/gender extraction is perfect (100%); response time acceptable (23s avg); image quality scoring works (88%); no API errors; record save fixed.
+Critical gap: Arabic NAME extraction fails 6/6 — the VLM reads Arabic text but the fuzzy matcher (fieldMatches) is too strict on Arabic normalization. The Arabic OCR pass DOES read the names (visible in rawText), but the comparison rejects them due to whitespace/diacritic differences. This is a comparison bug, not an OCR bug.
+Secondary gap: document number 2/6 misses (likely MRZ vs printed-number confusion).
+
+Lint: 0 errors. Browser: rebrand confirmed (title, heading, logo all show Cirkle).
+
+Stage Summary:
+- Cirkle brand applied (teal #1A4A5A + cream #FDFCF9 + animated 3-ring logo).
+- Competitor research: commercial KYC costs $0.80-$5/check; Cirkle costs $0.
+- Zero-cost stack confirmed: all components are free/open-source, no per-check billing.
+- Stress test: 78% field accuracy, 0/6 full pass. Arabic name matcher is the critical fix needed (comparison logic, not OCR).

@@ -168,7 +168,7 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <FlaskConical className="h-5 w-5 text-emerald-600" /> Evaluation Lab
+            <FlaskConical className="h-5 w-5 text-teal-600" /> Evaluation Lab
           </h2>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -181,7 +181,7 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-600" /> Run stress test
+              <Activity className="h-4 w-4 text-teal-600" /> Run stress test
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -200,7 +200,7 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
                       onClick={() => setConcurrency(c)}
                       className={`h-8 w-8 rounded-md border text-sm font-medium transition ${
                         concurrency === c
-                          ? "bg-emerald-600 text-white border-emerald-600"
+                          ? "bg-teal-600 text-white border-teal-600"
                           : "bg-background hover:bg-muted"
                       }`}
                     >
@@ -226,28 +226,28 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Layers className="h-4 w-4 text-emerald-600" /> Summary
+              <Layers className="h-4 w-4 text-teal-600" /> Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Total runs</span><span className="font-semibold">{runs.length}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Completed</span><span className="font-semibold">{runs.filter((r) => r.status === "completed").length}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Running</span><span className="font-semibold text-amber-600">{runs.filter((r) => r.status === "running").length}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Best accuracy</span><span className="font-semibold text-emerald-600">{Math.round(Math.max(0, ...runs.map((r) => r.overallAccuracy * 100)))}%</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Best accuracy</span><span className="font-semibold text-teal-600">{Math.round(Math.max(0, ...runs.map((r) => r.overallAccuracy * 100)))}%</span></div>
           </CardContent>
         </Card>
       </div>
 
       {/* Active run progress + charts */}
       {activeRun && (
-        <Card className="border-emerald-200">
+        <Card className="border-teal-200">
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-2">
-                <Gauge className="h-4 w-4 text-emerald-600" /> {activeRun.name || "Run"}
+                <Gauge className="h-4 w-4 text-teal-600" /> {activeRun.name || "Run"}
               </span>
               <Badge variant={activeRun.status === "completed" ? "default" : "secondary"}
-                className={activeRun.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                className={activeRun.status === "completed" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700"}>
                 {activeRun.status}
               </Badge>
             </CardTitle>
@@ -367,7 +367,7 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
                           <ResultCell correct={r.expiryCorrect} expected={r.expectedExpiry} actual={r.actualExpiry} mono />
                           <TableCell className="text-right font-mono text-xs">{(r.responseTimeMs / 1000).toFixed(1)}s</TableCell>
                           <TableCell className="text-center">
-                            {r.passed ? <CheckCircle2 className="h-4 w-4 text-emerald-600 inline" /> : <XCircle className="h-4 w-4 text-rose-500 inline" />}
+                            {r.passed ? <CheckCircle2 className="h-4 w-4 text-teal-600 inline" /> : <XCircle className="h-4 w-4 text-rose-500 inline" />}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -418,7 +418,7 @@ export function EvaluationLab({ onBack }: { onBack: () => void }) {
                       <TableCell className="font-medium truncate max-w-[200px]">{r.name}</TableCell>
                       <TableCell>
                         <Badge variant={r.status === "completed" ? "default" : "secondary"}
-                          className={r.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                          className={r.status === "completed" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700"}>
                           {r.status}
                         </Badge>
                       </TableCell>
@@ -449,10 +449,10 @@ function Stat({ label, value, icon: Icon, good }: { label: string; value: string
   return (
     <div className="rounded-lg border p-3 space-y-1">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Icon className={`h-3.5 w-3.5 ${good === false ? "text-rose-500" : good === true ? "text-emerald-600" : "text-muted-foreground"}`} />
+        <Icon className={`h-3.5 w-3.5 ${good === false ? "text-rose-500" : good === true ? "text-teal-600" : "text-muted-foreground"}`} />
         {label}
       </div>
-      <div className={`text-xl font-bold ${good === false ? "text-rose-600" : good === true ? "text-emerald-700" : ""}`}>{value}</div>
+      <div className={`text-xl font-bold ${good === false ? "text-rose-600" : good === true ? "text-teal-700" : ""}`}>{value}</div>
     </div>
   );
 }
@@ -461,7 +461,7 @@ function ResultCell({ correct, expected, actual, mono }: { correct: boolean; exp
   return (
     <TableCell className="text-center">
       <div className="flex flex-col items-center gap-0.5">
-        {correct ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-rose-500" />}
+        {correct ? <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" /> : <XCircle className="h-3.5 w-3.5 text-rose-500" />}
         {actual ? (
           <span className={`text-xs ${mono ? "font-mono" : ""} truncate max-w-[120px]`} title={actual || ""} dir="auto">{actual}</span>
         ) : (

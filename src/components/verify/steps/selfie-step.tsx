@@ -124,14 +124,14 @@ export function SelfieStep() {
         <Card>
           <CardContent className="p-5 space-y-4">
             <h3 className="font-semibold flex items-center gap-2">
-              <ScanFace className="h-4 w-4 text-emerald-600" /> Face match result
+              <ScanFace className="h-4 w-4 text-teal-600" /> Face match result
             </h3>
             {!selfie && <p className="text-sm text-muted-foreground">Capture a selfie to run the comparison.</p>}
 
             {selfie && loading && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> Comparing face to document…
+                  <Loader2 className="h-4 w-4 animate-spin text-teal-600" /> Comparing face to document…
                 </div>
                 <Progress value={70} className="h-1.5" />
               </div>
@@ -141,7 +141,7 @@ export function SelfieStep() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   {faceMatch.isMatch ? (
-                    <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+                    <CheckCircle2 className="h-10 w-10 text-teal-600" />
                   ) : (
                     <XCircle className="h-10 w-10 text-rose-600" />
                   )}
