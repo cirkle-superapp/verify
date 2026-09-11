@@ -57,11 +57,11 @@ export class TursoHttpClient {
   private wrapArg(v: unknown): unknown {
     if (v === null || v === undefined) return { type: "null" };
     if (typeof v === "string") return { type: "text", value: v };
-    if (typeof v === "boolean") return { type: "integer", value: v ? 1 : 0 };
+    if (typeof v === "boolean") return { type: "integer", value: v ? "1" : "0" };
     if (typeof v === "number") {
-      // Use float if non-integer, else integer
-      if (Number.isInteger(v)) return { type: "integer", value: v };
-      return { type: "float", value: v };
+      // Turso v2/pipeline expects integer/float values as STRINGS, not numbers
+      if (Number.isInteger(v)) return { type: "integer", value: String(v) };
+      return { type: "float", value: String(v) };
     }
     if (v instanceof Date) return { type: "text", value: v.toISOString() };
     if (Buffer.isBuffer(v)) return { type: "blob", value: v.toString("base64") };
