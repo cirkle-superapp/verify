@@ -1,0 +1,55 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono, Cairo } from "next/font/google";
+import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const cairo = Cairo({
+  variable: "--font-cairo",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+export const metadata: Metadata = {
+  title: "Live Identity Verification — Egyptian & Arabic Documents",
+  description:
+    "AI-powered live identity verification: read Egyptian and Arabic documents, capture a live selfie, and prove liveness with movement challenges.",
+  keywords: ["identity verification", "KYC", "Egyptian ID", "Arabic OCR", "liveness", "face match", "VLM"],
+  authors: [{ name: "Z.ai" }],
+  icons: {
+    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+  },
+  openGraph: {
+    title: "Live Identity Verification",
+    description: "Read Egyptian/Arabic documents, match faces, and verify liveness.",
+    type: "website",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} ${cairo.variable} antialiased bg-background text-foreground`}
+      >
+        {children}
+        <Toaster />
+        <SonnerToaster richColors position="top-center" />
+      </body>
+    </html>
+  );
+}

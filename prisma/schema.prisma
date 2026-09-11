@@ -1,0 +1,46 @@
+// Prisma schema for Live Identity Verification
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Verification {
+  id            String   @id @default(cuid())
+  // Document info
+  docType       String   // "national_id" | "passport" | "driver_license" | "residence"
+  docSide       String   @default("front") // "front" | "back" | "both"
+  docImageFront String?  // base64 stored briefly (data URL)
+  docImageBack  String?
+  // Extracted fields (Arabic + English)
+  fullNameAr    String?
+  fullNameEn    String?
+  nationalId    String?
+  birthDate     String?
+  address       String?
+  gender        String?
+  documentNo    String?
+  expiryDate    String?
+  nationality   String?
+  job           String?
+  religion      String?
+  maritalStatus String?
+  extraFields   String?  // JSON string of any other extracted fields
+  // Selfie + liveness
+  selfieImage   String?
+  livenessFrames String?  // JSON array of frame data URLs
+  livenessActions String?  // JSON array of performed actions
+  // Results
+  docConfidence  Float    @default(0)
+  faceMatchScore Float    @default(0)
+  livenessScore  Float    @default(0)
+  status         String   @default("pending") // pending | verified | failed | rejected
+  notes          String?
+  // Meta
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
