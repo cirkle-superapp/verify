@@ -278,10 +278,12 @@ Return STRICT JSON only (no markdown) with this exact schema:
 }
 
 Rules:
-- For each field, only fill it if you are confident it is on the document. Otherwise empty string.
+- For each field, only fill it if you are CONFIDENT it is actually printed and readable on the document. Otherwise return an empty string.
+- IMPORTANT: If a field is blank/empty/not printed on the document, you MUST return an empty string "". Do NOT guess, hallucinate, or infer a value. An empty field is a valid and common state.
+- Do NOT generate single-word values for the job/profession field. If the الوظيفة field is blank on the card, return "". If it has multi-word text like "حاصل على بكالوريوس صيدلة", return that exact text.
 - The nationalId MUST be exactly 14 digits for an Egyptian ID.
 - Preserve Arabic diacritics and exact letter forms.
-- fieldConfidence must reflect how clearly you could read each field (low for blurry/partial).`;
+- fieldConfidence must reflect how clearly you could read each field (low for blurry/partial, and 0 for fields that are empty/absent).`;
 
   const images = [frontImage];
   if (backImage) images.push(backImage);
@@ -363,7 +365,17 @@ export async function extractDocumentData(
     documentNo,
     expiryDate,
     nationality,
-    job: normalizeArabic(stripLabel(raw.job)) || undefined,
+    // Job: if the field confidence is very low AND the value is a single short word,
+    // it's likely a hallucination. Drop it (return undefined) so the UI shows "—".
+    job: (() => {
+      const jobVal = normalizeArabic(stripLabel(raw.job)) || undefined;
+      const jobConf = raw.fieldConfidence?.job;
+      if (jobVal && typeof jobConf === "number" && jobConf < 0.5) {
+        const wordCount = jobVal.trim().split(/\s+/).length;
+        if (wordCount <= 1) return undefined; // likely hallucinated single word
+      }
+      return jobVal;
+    })(),
     religion: normalizeArabic(stripLabel(raw.religion)) || undefined,
     maritalStatus: normalizeArabic(stripLabel(raw.maritalStatus)) || undefined,
     extraFields: raw.extraFields || undefined,
