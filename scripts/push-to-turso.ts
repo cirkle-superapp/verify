@@ -21,9 +21,9 @@ async function main() {
   const url = process.env.TURSO_DATABASE_URL;
   const token = process.env.TURSO_AUTH_TOKEN;
 
-  if (!url || !token) {
+  if (!url) {
     console.error(
-      "Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN.\n\n" +
+      "Missing TURSO_DATABASE_URL.\n\n" +
         "Usage:\n" +
         "  TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... bun run scripts/push-to-turso.ts\n\n" +
         "Get a valid token with:\n" +
@@ -33,7 +33,8 @@ async function main() {
   }
 
   console.log(`Connecting to ${url}...`);
-  const client = createClient({ url, authToken: token });
+  // token is optional (local sqld doesn't require it)
+  const client = createClient(token ? { url, authToken: token } : { url });
 
   // Test connection
   try {

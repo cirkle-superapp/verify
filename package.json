@@ -11,7 +11,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "db:push-turso": "bun run scripts/push-to-turso.ts"
+    "db:push-turso": "bun run scripts/push-to-turso.ts",
+    "db:turso-doctor": "bun run scripts/turso-doctor.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
