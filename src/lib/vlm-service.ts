@@ -492,6 +492,37 @@ export async function extractDocumentData(
     }
   }
 
+  // ─── PASS 5: Country detection + spec validation ──────────────────────
+  // Use the worldwide document specs catalog to:
+  //  - Detect the issuing country from the national ID format
+  //  - Validate the national ID against the country's pattern
+  //  - Store detected country + validation flags in extraFields
+  try {
+    const { DOCUMENT_SPECS } = await import("@/lib/doc-specs/catalog");
+    if (result.nationalId) {
+      // Find a spec whose nationalIdPattern matches
+      for (const spec of DOCUMENT_SPECS) {
+        if (spec.nationalIdPattern && spec.docType === docType) {
+          try {
+            const re = new RegExp(spec.nationalIdPattern);
+            if (re.test(result.nationalId)) {
+              if (!result.extraFields) result.extraFields = {};
+              result.extraFields["_detectedCountry"] = spec.country;
+              result.extraFields["_detectedCountryName"] = spec.countryName;
+              result.extraFields["_idPatternMatched"] = "true";
+              result.extraFields["_idExpectedLength"] = String(spec.nationalIdLength || "?");
+              break;
+            }
+          } catch {
+            // invalid regex → skip
+          }
+        }
+      }
+    }
+  } catch {
+    // catalog import is optional
+  }
+
   return result;
 }
 

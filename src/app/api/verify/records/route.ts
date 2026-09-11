@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sanitizeForDb, validateDataUrl, validateNationalId } from "@/lib/security";
 import type { DocType, ExtractedDocumentData, FaceMatchResult, LivenessAction, LivenessResult, VerificationStatus } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
@@ -25,12 +26,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const docType: DocType = body.docType || "national_id";
-    const docSide: string = body.docSide || "front";
-    const docImageFront: string | null = body.docImageFront ?? null;
-    const docImageBack: string | null = body.docImageBack ?? null;
+    const docSide: string = String(body.docSide || "front").slice(0, 20);
+    // Validate image data URLs (size + format)
+    let docImageFront: string | null = body.docImageFront ?? null;
+    let docImageBack: string | null = body.docImageBack ?? null;
+    let selfieImage: string | null = body.selfieImage ?? null;
+    for (const [k, v] of Object.entries({ docImageFront, docImageBack, selfieImage })) {
+      if (v) {
+        const check = validateDataUrl(v);
+        if (!check.ok) {
+          // Drop oversized/invalid images rather than failing
+          console.warn(`[/api/verify/records] ${k} invalid: ${check.reason}`);
+          if (k === "docImageFront") docImageFront = null;
+          if (k === "docImageBack") docImageBack = null;
+          if (k === "selfieImage") selfieImage = null;
+        }
+      }
+    }
 
     const extracted: ExtractedDocumentData | undefined = body.docExtracted;
-    const selfieImage: string | null = body.selfieImage ?? null;
     const livenessFrames: string[] = body.livenessFrames ?? [];
     const livenessActions: LivenessAction[] = body.livenessActions ?? [];
     const faceMatch: FaceMatchResult | null = body.faceMatch ?? null;
@@ -55,10 +69,6 @@ export async function POST(req: NextRequest) {
       (!liveness || liveness.isLive);
     status = allPassed ? "verified" : notes.length > 0 ? "failed" : "pending";
 
-    // IMPORTANT: Do NOT store raw liveness frames in the DB.
-    // 15 frames × ~50KB each = ~750KB of base64 per row, which combined with
-    // doc + selfie images made the INSERT fail (payload too large / timeout).
-    // Instead, store only the count and the list of actions performed.
     const livenessFrameCount = livenessFrames.length;
 
     const created = await db.verification.create({
@@ -67,30 +77,30 @@ export async function POST(req: NextRequest) {
         docSide,
         docImageFront,
         docImageBack,
-        fullNameAr: extracted?.fullNameAr ?? null,
-        fullNameEn: extracted?.fullNameEn ?? null,
-        nationalId: extracted?.nationalId ?? null,
-        birthDate: extracted?.birthDate ?? null,
-        address: extracted?.address ?? null,
-        gender: extracted?.gender ?? null,
-        documentNo: extracted?.documentNo ?? null,
-        expiryDate: extracted?.expiryDate ?? null,
-        nationality: extracted?.nationality ?? null,
-        job: extracted?.job ?? null,
-        religion: extracted?.religion ?? null,
-        maritalStatus: extracted?.maritalStatus ?? null,
-        extraFields: extracted?.extraFields ? JSON.stringify(extracted.extraFields) : null,
+        // Sanitize all text fields before storing (prevents log injection, truncates oversized)
+        fullNameAr: sanitizeForDb(extracted?.fullNameAr),
+        fullNameEn: sanitizeForDb(extracted?.fullNameEn),
+        nationalId: sanitizeForDb(extracted?.nationalId),
+        birthDate: sanitizeForDb(extracted?.birthDate),
+        address: sanitizeForDb(extracted?.address),
+        gender: sanitizeForDb(extracted?.gender),
+        documentNo: sanitizeForDb(extracted?.documentNo),
+        expiryDate: sanitizeForDb(extracted?.expiryDate),
+        nationality: sanitizeForDb(extracted?.nationality),
+        job: sanitizeForDb(extracted?.job),
+        religion: sanitizeForDb(extracted?.religion),
+        maritalStatus: sanitizeForDb(extracted?.maritalStatus),
+        extraFields: extracted?.extraFields ? JSON.stringify(extracted.extraFields).slice(0, 2000) : null,
         imageQuality,
         fieldConfidence,
         selfieImage,
-        // Store only metadata, not the raw frames:
         livenessFrames: JSON.stringify({ count: livenessFrameCount, note: "frames analyzed live, not persisted" }),
         livenessActions: livenessActions.length ? JSON.stringify(livenessActions) : null,
         docConfidence,
         faceMatchScore,
         livenessScore,
         status,
-        notes: notes.length ? notes.join("; ") : null,
+        notes: notes.length ? sanitizeForDb(notes.join("; ")) : null,
       },
     });
 

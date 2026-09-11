@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Home as HomeIcon, FlaskConical, Database } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -16,9 +16,10 @@ import { ResultStep } from "@/components/verify/steps/result-step";
 import { HistoryView } from "@/components/verify/history-view";
 import { EvaluationLab } from "@/components/verify/evaluation-lab";
 import { TrainingData } from "@/components/verify/training-data";
+import { SpecsBrowser } from "@/components/verify/specs-browser";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 
-type View = "wizard" | "history" | "eval" | "training";
+type View = "wizard" | "history" | "eval" | "training" | "specs";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
@@ -47,6 +48,7 @@ export default function Home() {
             <NavButton active={view === "wizard"} onClick={() => setView("wizard")} icon={HomeIcon} label="Verify" />
             <NavButton active={view === "history"} onClick={() => setView("history")} icon={History} label="History" />
             <NavButton active={view === "training"} onClick={() => setView("training")} icon={Database} label="Training" />
+            <NavButton active={view === "specs"} onClick={() => setView("specs")} icon={Globe} label="Specs" />
             <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label="Lab" />
           </div>
         </div>
@@ -58,6 +60,8 @@ export default function Home() {
           <HistoryView onBack={() => setView("wizard")} />
         ) : view === "training" ? (
           <TrainingData onBack={() => setView("wizard")} />
+        ) : view === "specs" ? (
+          <SpecsBrowser onBack={() => setView("wizard")} />
         ) : view === "eval" ? (
           <EvaluationLab onBack={() => setView("wizard")} />
         ) : (
