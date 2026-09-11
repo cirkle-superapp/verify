@@ -53,15 +53,21 @@ async function main() {
     process.exit(1);
   }
 
-  // Read and apply schema
+  // Read schema and strip comments line-by-line BEFORE splitting on semicolons
+  // (otherwise a comment before the first statement causes the whole first
+  // CREATE TABLE to be filtered out)
   const schemaPath = join(import.meta.dir, "..", "prisma", "schema.sql");
-  const schema = readFileSync(schemaPath, "utf-8");
+  const rawSchema = readFileSync(schemaPath, "utf-8");
+  const schema = rawSchema
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
 
   // Split on semicolons (not inside strings — our schema has none, so simple split works)
   const statements = schema
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .filter((s) => s.length > 0);
 
   console.log(`\nApplying ${statements.length} DDL statements...`);
   let applied = 0;
