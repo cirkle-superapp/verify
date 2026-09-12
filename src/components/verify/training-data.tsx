@@ -182,11 +182,19 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {samples.map((s) => (
+          {samples.map((s) => {
+            const isImage = s.imageData?.startsWith("data:image/");
+            const isText = s.imageData?.startsWith("data:text/plain");
+            return (
             <Card key={s.id} className="overflow-hidden flex flex-col">
               <div className="relative aspect-[4/3] bg-muted">
-                {s.imageData ? (
+                {isImage ? (
                   <img src={s.imageData} alt={s.name} className="absolute inset-0 h-full w-full object-contain bg-black/5" />
+                ) : isText ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-muted to-muted/50 p-3 text-center">
+                    <FileText className="h-8 w-8 text-muted-foreground mb-1" />
+                    <span className="text-[10px] text-muted-foreground">Text-based training sample</span>
+                  </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                     <IdCard className="h-8 w-8" />
@@ -194,7 +202,7 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
                 )}
                 <div className="absolute top-2 right-2">
                   <Badge variant={s.source === "synthetic" ? "default" : "secondary"}
-                    className={s.source === "synthetic" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700"}>
+                    className={s.source === "synthetic" ? "bg-teal-100 text-teal-700" : s.source === "training" ? "bg-blue-100 text-blue-700" : s.source === "worldwide" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"}>
                     {s.source}
                   </Badge>
                 </div>
