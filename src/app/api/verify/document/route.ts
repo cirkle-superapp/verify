@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractDocumentData } from "@/lib/vlm-service";
 import { normalizeForVlm, isLikelyTooLarge, parseDataUrl } from "@/lib/image-server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logAudit, getClientIp } from "@/lib/audit-log";
 import type { DocType } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
@@ -10,9 +11,13 @@ export const maxDuration = 180;
 export async function POST(req: NextRequest) {
   // Rate limit: 10 document extractions per minute per IP
   const limited = checkRateLimit(req, { maxRequests: 10, windowMs: 60_000, prefix: "doc" });
-  if (limited) return limited;
+  if (limited) {
+    logAudit({ type: "rate_limited", ip: getClientIp(req), success: false, type: "rate_limited" } as any);
+    return limited;
+  }
 
   const startedAt = Date.now();
+  const ip = getClientIp(req);
   try {
     const body = await req.json();
     let frontImage: string | undefined = body.frontImage;
@@ -49,7 +54,16 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await extractDocumentData(frontImage, backImage, docType);
-    return NextResponse.json({ data, elapsedMs: Date.now() - startedAt });
+    const elapsed = Date.now() - startedAt;
+    logAudit({
+      type: "document_extract",
+      ip,
+      success: true,
+      durationMs: elapsed,
+      docType,
+      country: data?.extraFields?._detectedCountry as string | undefined,
+    });
+    return NextResponse.json({ data, elapsedMs: elapsed });
   } catch (e: any) {
     console.error("[/api/verify/document] error", e);
     const msg = String(e?.message || e?.toString?.() || "");

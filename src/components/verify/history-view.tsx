@@ -60,9 +60,21 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
             <History className="h-5 w-5 text-teal-600" /> Verification history
           </h2>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/api/verify/records/export?format=csv" download>
+              <Download className="h-4 w-4 mr-1" /> CSV
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/api/verify/records/export?format=json" download>
+              <Download className="h-4 w-4 mr-1" /> JSON
+            </a>
+          </Button>
+        </div>
       </div>
 
       {loading ? (

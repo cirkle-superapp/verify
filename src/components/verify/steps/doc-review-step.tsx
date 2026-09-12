@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, ArrowLeft, User, Hash, MapPin, Calendar, Briefcase, Heart, RotateCcw, FileText, ImageIcon, ShieldCheck, AlertTriangle, CheckCircle2, Wand2, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, User, Hash, MapPin, Calendar, Briefcase, Heart, RotateCcw, FileText, ImageIcon, ShieldCheck, AlertTriangle, CheckCircle2, Wand2, Loader2, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -130,6 +130,17 @@ export function DocReviewStep() {
           )}
           {extracted?.mrzParsed && (
             <Badge variant="outline" className="ml-1 text-[10px] bg-teal-50 text-teal-700">MRZ parsed</Badge>
+          )}
+          {extracted?.extraFields?._detectedCountry && (
+            <Badge variant="outline" className="ml-1 text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+              <Globe className="h-2.5 w-2.5 mr-0.5 inline" />
+              {extracted.extraFields._detectedCountryName || extracted.extraFields._detectedCountry}
+            </Badge>
+          )}
+          {extracted?.extraFields?._nameEn_fromArabic && (
+            <Badge variant="outline" className="ml-1 text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+              Translated
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
