@@ -424,6 +424,15 @@ export async function extractDocumentData(
     qualityResult.status === "fulfilled" ? qualityResult.value : undefined;
   const arabicText: string = arabicResult.status === "fulfilled" ? arabicResult.value : "";
 
+  // Debug: capture pass results for diagnostics
+  const _debug: any = {
+    qualityStatus: qualityResult.status,
+    qualityError: qualityResult.status === "rejected" ? String(qualityResult.reason?.message || qualityResult.reason) : undefined,
+    arabicStatus: arabicResult.status,
+    arabicError: arabicResult.status === "rejected" ? String(arabicResult.reason?.message || arabicResult.reason) : undefined,
+    arabicTextLength: arabicText.length,
+  };
+
   // Pass 3: structured extraction (depends on arabicText for context)
   let raw: RawStructuredFields;
   try {
@@ -487,7 +496,6 @@ export async function extractDocumentData(
     })(),
     religion: normalizeArabic(stripLabel(raw.religion)) || undefined,
     maritalStatus: normalizeArabic(stripLabel(raw.maritalStatus)) || undefined,
-    extraFields: raw.extraFields || undefined,
     rawText: raw.rawText || arabicText,
     arabicText: arabicText || undefined,
     hasPhoto: raw.hasPhoto ?? true,
@@ -495,6 +503,7 @@ export async function extractDocumentData(
     fieldConfidence: fc,
     imageQuality,
     mrzParsed: !!mrzInfo,
+    extraFields: { ...(raw.extraFields || {}), _debug },
     validationFlags: {
       nationalIdValid: idInfo?.isValid,
       nationalIdChecksumValid: idInfo?.checksumValid,
