@@ -64,9 +64,46 @@ interface VerificationState {
   goPrev: () => void;
 }
 
+// ─── Progress persistence (localStorage) ──────────────────────────
+// Saves the current step + docType so users don't lose progress on refresh.
+// Images are NOT persisted (too large for localStorage).
+
+const STORAGE_KEY = "cirkle_verify_progress";
+
+function saveProgress(state: Partial<VerificationState>) {
+  if (typeof window === "undefined") return;
+  try {
+    const toSave = {
+      step: state.step,
+      docType: state.docType,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch {}
+}
+
+function loadProgress(): { step: StepId; docType: DocType } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { step: parsed.step || "intro", docType: parsed.docType || "national_id" };
+  } catch {
+    return null;
+  }
+}
+
+function clearProgress() {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+// Load initial state from localStorage
+const saved = typeof window !== "undefined" ? loadProgress() : null;
+
 export const useVerificationStore = create<VerificationState>((set, get) => ({
-  step: "intro",
-  docType: "national_id",
+  step: saved?.step || "intro",
+  docType: saved?.docType || "national_id",
   docFront: null,
   docBack: null,
   docExtracted: null,
@@ -79,8 +116,8 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
   recordId: null,
   isSubmitting: false,
 
-  setStep: (s) => set({ step: s }),
-  setDocType: (t) => set({ docType: t }),
+  setStep: (s) => { set({ step: s }); saveProgress({ step: s }); },
+  setDocType: (t) => { set({ docType: t }); saveProgress({ docType: t }); },
   setDocFront: (img) => set({ docFront: img }),
   setDocBack: (img) => set({ docBack: img }),
   setDocExtracted: (d) => set({ docExtracted: d }),
@@ -93,7 +130,8 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
   setFaceMatch: (f) => set({ faceMatch: f }),
   setRecordId: (id) => set({ recordId: id }),
   setSubmitting: (b) => set({ isSubmitting: b }),
-  reset: () =>
+  reset: () => {
+    clearProgress();
     set({
       step: "intro",
       docType: "national_id",
@@ -108,15 +146,24 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
       faceMatch: null,
       recordId: null,
       isSubmitting: false,
-    }),
+    });
+  },
   goNext: () => {
     const { step } = get();
     const idx = STEP_ORDER.indexOf(step);
-    if (idx < STEP_ORDER.length - 1) set({ step: STEP_ORDER[idx + 1] });
+    if (idx < STEP_ORDER.length - 1) {
+      const next = STEP_ORDER[idx + 1];
+      set({ step: next });
+      saveProgress({ step: next });
+    }
   },
   goPrev: () => {
     const { step } = get();
     const idx = STEP_ORDER.indexOf(step);
-    if (idx > 0) set({ step: STEP_ORDER[idx - 1] });
+    if (idx > 0) {
+      const prev = STEP_ORDER[idx - 1];
+      set({ step: prev });
+      saveProgress({ step: prev });
+    }
   },
 }));

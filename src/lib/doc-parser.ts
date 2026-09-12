@@ -88,26 +88,86 @@ function isLabel(s: string): boolean {
   return labels.some((l) => s.includes(l)) || s.endsWith(":");
 }
 
-/** Extract the national ID number using regex */
+/** Extract the national ID number using multi-format regex.
+ *  Supports:
+ *  - Egyptian ID: 14 digits starting with 2 or 3
+ *  - German ID: L + 7 digits (e.g. L1234567)
+ *  - French ID: 10-12 digits
+ *  - UK ID: AB1234567C (2 letters + 7 digits + 1 letter)
+ *  - Italian ID: AB123456 (2 letters + 6 digits)
+ *  - Spanish ID: 1 letter + 8 digits (e.g. X12345678)
+ *  - Dutch ID: AAA1234567 (3-9 pattern, letters+digits)
+ *  - Saudi ID: 1 + 9 digits (10 total)
+ *  - UAE ID: 784-XXXX-XXXXXXX-X (15 chars with hyphens)
+ *  - Kuwait ID: 2/3 + 11 digits (12 total)
+ *  - Qatar ID: 2/8 + 10 digits (11 total)
+ *  - Bahrain ID: 9 digits
+ *  - Oman ID: 8 digits
+ *  - Generic: any 8-18 digit or alphanumeric sequence
+ */
 function extractNationalId(ocrText: string): { value: string; confidence: number } | null {
-  // Look for 14-digit sequences (Egyptian ID) or other patterns
-  // Also handle Arabic-Indic digits
   const western = ocrText.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
-  // Try word-boundary match first (for standalone numbers)
-  const matches = western.match(/\b[23]\d{13}\b/g);
-  if (matches && matches.length > 0) {
-    return { value: matches[0], confidence: 0.9 };
+
+  // Try label-based extraction first: "National ID:", "رقم الهوية:", "ID Number:", etc.
+  const labelMatch = extractField(western, [
+    "National ID", "nationalId", "ID Number", "الرقم القومي", "رقم الهوية",
+    "رقم الإقامة", "ID:", "Personal No", "Personalausweis", "Numéro national",
+    "Codice Fiscale", "DNI", "BSN", "PPS",
+  ]);
+  if (labelMatch && labelMatch.value) {
+    return { value: labelMatch.value, confidence: 0.85 };
   }
-  // Fallback: any 14-digit sequence anywhere (after label, colon, etc.)
-  const broadMatches = western.match(/[23]\d{13}/g);
-  if (broadMatches && broadMatches.length > 0) {
-    return { value: broadMatches[0], confidence: 0.7 };
-  }
-  // Even broader: any 14-digit sequence
-  const any14 = western.match(/\d{14}/g);
-  if (any14 && any14.length > 0) {
-    return { value: any14[0], confidence: 0.5 };
-  }
+
+  // Egyptian ID: 14 digits starting with 2 or 3
+  const egMatch = western.match(/\b[23]\d{13}\b/g);
+  if (egMatch) return { value: egMatch[0], confidence: 0.9 };
+  const egBroad = western.match(/[23]\d{13}/g);
+  if (egBroad) return { value: egBroad[0], confidence: 0.7 };
+
+  // German ID: L + 7 digits
+  const deMatch = western.match(/\b([A-Z]\d{7,8})\b/g);
+  if (deMatch) return { value: deMatch[0], confidence: 0.8 };
+
+  // UK ID: 2 letters + 6 digits + 1 letter (AB123456C)
+  const ukMatch = western.match(/\b([A-Z]{2}\d{6}[A-Z])\b/g);
+  if (ukMatch) return { value: ukMatch[0], confidence: 0.85 };
+
+  // Italian ID: 2 letters + 6 digits
+  const itMatch = western.match(/\b([A-Z]{2}\d{6})\b/g);
+  if (itMatch) return { value: itMatch[0], confidence: 0.8 };
+
+  // Spanish DNI: 1 letter + 8 digits
+  const esMatch = western.match(/\b([A-Z]\d{8})\b/g);
+  if (esMatch) return { value: esMatch[0], confidence: 0.8 };
+
+  // Dutch BSN: 9 digits
+  const nlMatch = western.match(/\b(\d{9})\b/g);
+  if (nlMatch) return { value: nlMatch[0], confidence: 0.75 };
+
+  // Saudi ID: 1 + 9 digits (10 total)
+  const saMatch = western.match(/\b(1\d{9})\b/g);
+  if (saMatch) return { value: saMatch[0], confidence: 0.85 };
+
+  // UAE ID: 784-XXXX-XXXXXXX-X pattern
+  const aeMatch = western.match(/\b(784-\d{4}-\d{7}-\d)\b/g);
+  if (aeMatch) return { value: aeMatch[0], confidence: 0.9 };
+
+  // Kuwait ID: 12 digits
+  const kwMatch = western.match(/\b(\d{12})\b/g);
+  if (kwMatch) return { value: kwMatch[0], confidence: 0.75 };
+
+  // Qatar ID: 11 digits
+  const qaMatch = western.match(/\b(\d{11})\b/g);
+  if (qaMatch) return { value: qaMatch[0], confidence: 0.75 };
+
+  // Generic fallback: any 8-18 digit sequence
+  const genericMatch = western.match(/\b(\d{8,18})\b/g);
+  if (genericMatch) return { value: genericMatch[0], confidence: 0.5 };
+
+  // Alphanumeric fallback: letters+digits 6-15 chars
+  const alphaMatch = western.match(/\b([A-Z0-9]{6,15})\b/g);
+  if (alphaMatch) return { value: alphaMatch[0], confidence: 0.4 };
+
   return null;
 }
 

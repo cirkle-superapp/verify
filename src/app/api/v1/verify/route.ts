@@ -32,6 +32,13 @@ export async function GET() {
         body: { frontImage: "data:image/jpeg;base64,...", backImage: "data:image/jpeg;base64,...", docType: "national_id" },
         response: { fullNameAr: "string", nationalId: "string", confidence: "number" },
       },
+      batch: {
+        method: "POST",
+        path: "/api/v1/verify/batch",
+        description: "Batch verification — process up to 50 documents in parallel (competitors charge $2-5/check; Cirkle: $0)",
+        body: { documents: [{ frontImage: "...", docType: "national_id", selfieImage: "..." }] },
+        response: { status: "completed", succeeded: 48, failed: 2, results: [] },
+      },
       faceMatch: {
         method: "POST",
         path: "/api/v1/verify/face-match",
