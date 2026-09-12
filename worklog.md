@@ -460,3 +460,51 @@ Stage Summary:
   Arabic→English translation with cross-validation, security hardening
   (CSP, sanitization, input validation), and a backup script.
 - Deployed live at https://cirkle-verify.vercel.app
+
+---
+Task ID: 18
+Agent: main
+Task: Implement health check, export, audit logging, country badge — push to GitHub/Vercel/Turso.
+
+IMPLEMENTED:
+
+1. Health Check Endpoint (/api/health):
+   - Tests DB connection (type: turso/sqlite, latency in ms)
+   - Tests VLM SDK availability
+   - Returns 200 healthy / 503 degraded
+   - Includes version, uptime, timestamp
+   - Verified live: status=healthy, DB=turso, latency=261ms, VLM=true
+
+2. Export Endpoint (/api/verify/records/export):
+   - ?format=csv: downloads all records as CSV with proper escaping
+   - ?format=json: downloads as pretty-printed JSON
+   - Strips heavy image data from export
+   - CSV/JSON download buttons in History view
+
+3. Audit Logging (src/lib/audit-log.ts):
+   - Structured JSON log entries: timestamp, type, IP, duration, success, docType, country
+   - Wired into /api/verify/document (document_extract + rate_limited events)
+   - Captured by Vercel log infrastructure in production
+
+4. UI Improvements:
+   - Doc review step: detected country badge (blue Globe icon) + "Translated" badge (purple)
+   - History view: CSV + JSON export buttons alongside Refresh
+
+BUGS FIXED:
+- getClientIp import: was importing from audit-log, should be from rate-limit
+- Button asChild with <a> tag caused client-side error → replaced with plain <a> styled as button
+- Turso returns {type:"null"} for NULL values → fixed cell parsing to convert to JS null
+
+VERIFIED LIVE (https://cirkle-verify.vercel.app):
+- Health check: healthy, DB turso, 261ms latency, VLM true ✓
+- Specs API: 41 specs, 32 countries ✓
+- Records API: 3 records with Arabic text ✓
+- Samples API: 6 synthetic samples ✓
+- Export CSV: proper CSV with headers ✓
+- Export JSON: pretty-printed JSON ✓
+- History page: renders records + export buttons without error ✓
+- Homepage: HTTP 200 in 0.48s ✓
+
+GitHub: commit bc66d61 pushed to cirkle-superapp/verify
+Vercel: auto-deployed, READY
+Turso: 4 tables, 3 records, 6 samples, backup created
