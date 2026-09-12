@@ -93,14 +93,20 @@ function extractNationalId(ocrText: string): { value: string; confidence: number
   // Look for 14-digit sequences (Egyptian ID) or other patterns
   // Also handle Arabic-Indic digits
   const western = ocrText.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  // Try word-boundary match first (for standalone numbers)
   const matches = western.match(/\b[23]\d{13}\b/g);
   if (matches && matches.length > 0) {
     return { value: matches[0], confidence: 0.9 };
   }
-  // Broader: any 14-digit sequence
-  const broad = western.match(/\b\d{14}\b/g);
-  if (broad && broad.length > 0) {
-    return { value: broad[0], confidence: 0.7 };
+  // Fallback: any 14-digit sequence anywhere (after label, colon, etc.)
+  const broadMatches = western.match(/[23]\d{13}/g);
+  if (broadMatches && broadMatches.length > 0) {
+    return { value: broadMatches[0], confidence: 0.7 };
+  }
+  // Even broader: any 14-digit sequence
+  const any14 = western.match(/\d{14}/g);
+  if (any14 && any14.length > 0) {
+    return { value: any14[0], confidence: 0.5 };
   }
   return null;
 }
