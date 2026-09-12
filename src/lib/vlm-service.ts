@@ -112,16 +112,25 @@ async function callVision(prompt: string, images: string[]): Promise<string> {
   }
 
   const doCall = async (imgs: string[]) => {
-    const response = await zai.chat.completions.createVision({
-      messages: [
-        {
-          role: "user",
-          content: buildContent(prompt, imgs),
-        },
-      ],
-      thinking: { type: "disabled" },
-    } as any);
-    return response.choices[0]?.message?.content ?? "";
+    try {
+      const response = await zai.chat.completions.createVision({
+        messages: [
+          {
+            role: "user",
+            content: buildContent(prompt, imgs),
+          },
+        ],
+        thinking: { type: "disabled" },
+      } as any);
+      const content = response.choices[0]?.message?.content ?? "";
+      if (!content) {
+        console.error("[callVision] VLM returned empty content. Response:", JSON.stringify(response).slice(0, 300));
+      }
+      return content;
+    } catch (e: any) {
+      console.error("[callVision] VLM call failed:", e?.message || e?.toString?.(), "| code:", e?.code);
+      throw e;
+    }
   };
 
   try {
