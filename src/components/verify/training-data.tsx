@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Database, Plus, Trash2, RefreshCw, ArrowLeft, Beaker, IdCard, Sparkles, Loader2,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
