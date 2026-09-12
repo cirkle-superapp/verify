@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractDocumentData } from "@/lib/vlm-service";
+import { runOCRMulti } from "@/lib/ocr-engine";
+import { extractDocumentSelfHosted } from "@/lib/doc-parser";
 import { normalizeForVlm, isLikelyTooLarge, parseDataUrl } from "@/lib/image-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit-log";
 import type { DocType } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 10 document extractions per minute per IP
   const limited = checkRateLimit(req, { maxRequests: 10, windowMs: 60_000, prefix: "doc" });
   if (limited) {
     logAudit({ type: "rate_limited", ip: getClientIp(req), success: false });
@@ -31,29 +31,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate the data URL is actually decodable.
     const parsed = parseDataUrl(frontImage);
     if (!parsed || parsed.buffer.length < 100) {
       return NextResponse.json(
-        {
-          error:
-            "The uploaded image could not be read. Please re-take the photo with better lighting and try again.",
-          code: "invalid_image",
-        },
+        { error: "The uploaded image could not be read. Please re-take the photo.", code: "invalid_image" },
         { status: 400 }
       );
     }
 
-    // Pre-normalize if the image looks too large (saves a VLM round-trip).
+    // Pre-normalize large images for OCR
     if (isLikelyTooLarge(frontImage)) {
       try {
         frontImage = await normalizeForVlm(frontImage);
-      } catch {
-        // continue with original — VLM service will retry on 1210
-      }
+      } catch {}
     }
 
-    const data = await extractDocumentData(frontImage, backImage, docType);
+    // Self-hosted OCR pipeline (no external API calls)
+    // Pass 1: Tesseract.js OCR on front + back
+    const ocrResults = await runOCRMulti(frontImage, backImage);
+
+    // Pass 2: Rule-based field extraction using OCR text + specs catalog
+    const data = await extractDocumentSelfHosted(
+      ocrResults.front,
+      ocrResults.back,
+      docType,
+      frontImage
+    );
+
     const elapsed = Date.now() - startedAt;
     logAudit({
       type: "document_extract",
@@ -63,45 +67,12 @@ export async function POST(req: NextRequest) {
       docType,
       country: data?.extraFields?._detectedCountry as string | undefined,
     });
-    return NextResponse.json({ data, elapsedMs: elapsed });
+
+    return NextResponse.json({ data, elapsedMs: elapsed, engine: "self-hosted" });
   } catch (e: any) {
     console.error("[/api/verify/document] error", e);
-    const msg = String(e?.message || e?.toString?.() || "");
-
-    // Map known VLM errors to user-friendly messages
-    if (msg.includes("1210") || msg.includes("图片输入格式") || msg.includes("图片解析错误")) {
-      return NextResponse.json(
-        {
-          error:
-            "The image format could not be processed by the AI. We automatically re-compress images, but this photo may be corrupted or in an unsupported format. Please re-take the photo as a clear JPEG/PNG.",
-          code: "image_format_error",
-        },
-        { status: 422 }
-      );
-    }
-    if (msg.includes("1213") || msg.includes("内容")) {
-      return NextResponse.json(
-        {
-          error:
-            "The AI model declined to process this image (possibly flagged content). Please try a different, clearer photo of the document.",
-          code: "content_filtered",
-        },
-        { status: 422 }
-      );
-    }
-    if (msg.includes("timeout") || msg.includes("ETIMEDOUT") || msg.includes("aborted")) {
-      return NextResponse.json(
-        {
-          error:
-            "The AI service took too long to respond. Please try again — the document image may be very complex.",
-          code: "timeout",
-        },
-        { status: 504 }
-      );
-    }
-
     return NextResponse.json(
-      { error: e?.message || "Failed to extract document data. Please try again.", code: "unknown" },
+      { error: e?.message || "Failed to extract document data", code: "unknown" },
       { status: 500 }
     );
   }
