@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sanitizeForDb, validateDataUrl, validateNationalId } from "@/lib/security";
 import { runFraudChecks, imageHash } from "@/lib/fraud-detection";
+import { neonDb } from "@/lib/neon-client";
 import type { DocType, ExtractedDocumentData, FaceMatchResult, LivenessAction, LivenessResult, VerificationStatus } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
@@ -139,7 +140,33 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ record: created, fraudCheck: fraudResult });
+    // ─── Dual-write: mirror to Neon PostgreSQL (fire-and-forget) ──────
+    if (neonDb.isAvailable()) {
+      neonDb.insertVerification({
+        id: created.id,
+        docType, docSide, docImageFront, docImageBack,
+        fullNameAr: sanitizeForDb(extracted?.fullNameAr),
+        fullNameEn: sanitizeForDb(extracted?.fullNameEn),
+        nationalId: sanitizeForDb(extracted?.nationalId),
+        birthDate: sanitizeForDb(extracted?.birthDate),
+        address: sanitizeForDb(extracted?.address),
+        gender: sanitizeForDb(extracted?.gender),
+        documentNo: sanitizeForDb(extracted?.documentNo),
+        expiryDate: sanitizeForDb(extracted?.expiryDate),
+        nationality: sanitizeForDb(extracted?.nationality),
+        job: sanitizeForDb(extracted?.job),
+        religion: sanitizeForDb(extracted?.religion),
+        maritalStatus: sanitizeForDb(extracted?.maritalStatus),
+        extraFields: extracted?.extraFields ? JSON.stringify(extracted.extraFields).slice(0, 2000) : null,
+        imageQuality, fieldConfidence, selfieImage,
+        livenessFrames: JSON.stringify({ count: livenessFrameCount }),
+        livenessActions: livenessActions.length ? JSON.stringify(livenessActions) : null,
+        docConfidence, faceMatchScore, livenessScore, status,
+        notes: notes.length ? sanitizeForDb(notes.join("; ")) : null,
+      }).catch(() => {}); // fire-and-forget — don't block on Neon
+    }
+
+    return NextResponse.json({ record: created, fraudCheck: fraudResult, neonMirrored: neonDb.isAvailable() });
   } catch (e: any) {
     console.error("[/api/verify/records POST] error", e);
     return NextResponse.json(
