@@ -96,8 +96,18 @@ export class TursoHttpClient {
       const obj: Record<string, unknown> = {};
       cols.forEach((name, i) => {
         const cell = row[i];
-        if (cell && typeof cell === "object" && "value" in cell) {
-          obj[name] = (cell as any).value;
+        if (cell === null || cell === undefined) {
+          obj[name] = null;
+        } else if (typeof cell === "object" && "type" in cell) {
+          // Turso returns typed cells: {type: "text"|"integer"|"float"|"blob"|"null", value: ...}
+          const typed = cell as any;
+          if (typed.type === "null") {
+            obj[name] = null;
+          } else if (typed.value !== undefined) {
+            obj[name] = typed.value;
+          } else {
+            obj[name] = null;
+          }
         } else {
           obj[name] = cell;
         }
@@ -135,8 +145,17 @@ export class TursoHttpClient {
         const obj: Record<string, unknown> = {};
         cols.forEach((name, i) => {
           const cell = row[i];
-          if (cell && typeof cell === "object" && "value" in cell) {
-            obj[name] = (cell as any).value;
+          if (cell === null || cell === undefined) {
+            obj[name] = null;
+          } else if (typeof cell === "object" && "type" in cell) {
+            const typed = cell as any;
+            if (typed.type === "null") {
+              obj[name] = null;
+            } else if (typed.value !== undefined) {
+              obj[name] = typed.value;
+            } else {
+              obj[name] = null;
+            }
           } else {
             obj[name] = cell;
           }
