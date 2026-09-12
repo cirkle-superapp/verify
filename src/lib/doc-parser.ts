@@ -187,17 +187,57 @@ export async function extractDocumentSelfHosted(
   const maritalResult = extractField(fullText, ["الحالة الاجتماعية", "Marital Status", "Marital"]);
   const docNoResult = extractDocumentNo(fullText);
 
-  // Normalize values
-  const fullNameAr = nameResult ? normalizeArabic(nameResult.value) || undefined : undefined;
+  // Fallback: if no name found via label, find the longest Arabic-only line
+  // (typically the name line on Egyptian IDs which don't have field labels)
+  let fallbackName: string | undefined;
+  if (!nameResult) {
+    const lines = fullText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    let bestLine = "";
+    for (const line of lines) {
+      // Check if line is primarily Arabic (at least 60% Arabic chars)
+      const arabicChars = (line.match(/[\u0600-\u06FF]/g) || []).length;
+      const totalChars = line.replace(/\s/g, "").length;
+      if (totalChars > 0 && arabicChars / totalChars > 0.6 && line.split(/\s+/).length >= 2 && line.length > bestLine.length) {
+        // Exclude lines that look like addresses (contain numbers)
+        if (!/\d{3,}/.test(line)) {
+          bestLine = line;
+        }
+      }
+    }
+    if (bestLine) {
+      // Clean up: remove non-Arabic noise
+      bestLine = bestLine.replace(/[^\u0600-\u06FF\s]/g, "").trim();
+      if (bestLine.split(/\s+/).length >= 2) {
+        fallbackName = bestLine;
+      }
+    }
+  }
+
+  // Fallback: extract gender from Arabic keywords
+  let fallbackGender: string | undefined;
+  if (!genderResult) {
+    if (/ذكر|ذكر/i.test(fullText)) fallbackGender = "Male";
+    else if (/أنثى|انثى|أنث/i.test(fullText)) fallbackGender = "Female";
+  }
+
+  // Fallback: extract religion
+  let fallbackReligion: string | undefined;
+  if (!religionResult) {
+    if (/مسلم/i.test(fullText)) fallbackReligion = "مسلم";
+    else if (/مسيحي/i.test(fullText)) fallbackReligion = "مسيحي";
+  }
+
+  // Normalize values (use fallbacks when label-based extraction fails)
+  const fullNameAr = nameResult ? normalizeArabic(nameResult.value) || undefined : (fallbackName ? normalizeArabic(fallbackName) || undefined : undefined);
   const fullNameEn = nameResult ? normalizeLatin(nameResult.value) || undefined : undefined;
   const nationalId = nationalIdResult ? digitsOnly(nationalIdResult.value) : undefined;
   const birthDate = birthDateResult?.value;
-  const gender = genderResult ? normalizeGender(genderResult.value) : undefined;
+  const gender = genderResult ? normalizeGender(genderResult.value) : fallbackGender;
   const expiryDate = expiryResult?.value;
   const nationality = nationalityResult ? normalizeLatin(nationalityResult.value) || undefined : undefined;
   const address = addressResult ? normalizeArabic(addressResult.value) || undefined : undefined;
   const job = jobResult ? normalizeArabic(jobResult.value) || undefined : undefined;
-  const religion = religionResult ? normalizeArabic(religionResult.value) || undefined : undefined;
+  const religion = religionResult ? normalizeArabic(religionResult.value) || undefined : fallbackReligion;
   const maritalStatus = maritalResult ? normalizeArabic(maritalResult.value) || undefined : undefined;
   const documentNo = docNoResult ? normalizeLatin(docNoResult.value) || undefined : undefined;
 

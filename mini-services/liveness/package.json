@@ -1,0 +1,10 @@
+{
+  "name": "cirkle-liveness-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "sharp": "^0.34.3"
+  }
+}

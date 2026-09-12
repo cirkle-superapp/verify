@@ -1,0 +1,12 @@
+{
+  "name": "cirkle-face-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
+    "sharp": "^0.34.3"
+  }
+}
