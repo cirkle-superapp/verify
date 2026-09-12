@@ -64,6 +64,27 @@ export async function GET() {
         path: "/api/v1/verify/health",
         description: "Service health check",
       },
+      session: {
+        method: "POST",
+        path: "/api/v1/verify/session",
+        description: "Create/manage verification sessions with expiry, state tracking, and audit trail",
+        body: {},
+        response: { session: { id: "vs_xxx", state: "created", expiresAt: "ISO" } },
+      },
+      fraudCheck: {
+        method: "POST",
+        path: "/api/v1/verify/fraud-check",
+        description: "Run anti-fraud checks: duplicate ID, velocity, blacklist, age, expiry, image reuse",
+        body: { nationalId: "string", fullNameAr: "string", birthDate: "YYYY-MM-DD", imageData: "data:..." },
+        response: { risk: "low|medium|high|blocked", score: 85, flags: [] },
+      },
+      analytics: {
+        method: "GET",
+        path: "/api/v1/verify/analytics",
+        description: "Real-time verification analytics: success rates, average scores, hourly distribution",
+        query: { days: "30" },
+        response: { total: 100, verifiedRate: 85, avgScores: {}, hourlyDistribution: [] },
+      },
     },
     engine: {
       ocr: "Tesseract.js v7 (Arabic + English traineddata)",

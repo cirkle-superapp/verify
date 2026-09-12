@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sanitizeForDb, validateDataUrl, validateNationalId } from "@/lib/security";
+import { runFraudChecks, imageHash } from "@/lib/fraud-detection";
 import type { DocType, ExtractedDocumentData, FaceMatchResult, LivenessAction, LivenessResult, VerificationStatus } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
@@ -71,6 +72,40 @@ export async function POST(req: NextRequest) {
 
     const livenessFrameCount = livenessFrames.length;
 
+    // ─── Fraud Detection ─────────────────────────────────────────────
+    // Run anti-fraud checks (duplicate ID, velocity, blacklist, age, expiry)
+    let fraudResult = null;
+    try {
+      // Get known IDs for duplicate check
+      const existingRecords = await db.verification.findMany({ take: 500 });
+      const knownIds = new Set(existingRecords.map((r: any) => r.nationalId).filter(Boolean));
+      const knownHashes = new Set(
+        existingRecords.map((r: any) => r.docImageFront).filter(Boolean).map((h: string) => imageHash(h))
+      );
+
+      fraudResult = runFraudChecks({
+        ip: req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown",
+        fullNameAr: extracted?.fullNameAr,
+        fullNameEn: extracted?.fullNameEn,
+        nationalId: extracted?.nationalId,
+        birthDate: extracted?.birthDate,
+        expiryDate: extracted?.expiryDate,
+        imageHash: docImageFront ? imageHash(docImageFront) : undefined,
+        knownIds,
+        knownHashes,
+      });
+
+      // If blocked by fraud, override status
+      if (fraudResult.risk === "blocked") {
+        status = "rejected";
+        notes.push(`FRAUD: ${fraudResult.summary}`);
+      } else if (fraudResult.flags.length > 0) {
+        notes.push(`FRAUD FLAGS: ${fraudResult.flags.map(f => f.code).join(", ")}`);
+      }
+    } catch (e) {
+      // fraud check is best-effort — don't block the save
+    }
+
     const created = await db.verification.create({
       data: {
         docType,
@@ -104,7 +139,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ record: created });
+    return NextResponse.json({ record: created, fraudCheck: fraudResult });
   } catch (e: any) {
     console.error("[/api/verify/records POST] error", e);
     return NextResponse.json(
