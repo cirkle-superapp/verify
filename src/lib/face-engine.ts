@@ -6,30 +6,36 @@
  * (128-dimensional embeddings), and compares them using Euclidean distance.
  *
  * License: MIT (@vladmandic/face-api)
+ *
+ * NOTE: face-api.js is imported dynamically at runtime (not at build time)
+ * to avoid the "TextEncoder is not a constructor" error during Next.js
+ * page data collection.
  */
 
-import * as faceapi from "@vladmandic/face-api";
 import sharp from "sharp";
 import { parseDataUrl } from "@/lib/image-server";
 import type { FaceMatchResult } from "@/lib/verification-types";
 
 let modelsLoaded = false;
+let faceapi: any = null;
 
 /**
- * Load face-api.js models. Models are loaded once and cached.
- * Uses the @vladmandic/face-api built-in model weights.
+ * Load face-api.js and its models dynamically (runtime only).
  */
-async function loadModels() {
-  if (modelsLoaded) return;
-  // @vladmandic/face-api loads models from CDN by default.
-  // In production, we bundle them locally.
-  const modelUrl = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-  await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl),
-    faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
-    faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
-  ]);
-  modelsLoaded = true;
+async function ensureFaceApi() {
+  if (!faceapi) {
+    faceapi = await import("@vladmandic/face-api");
+  }
+  if (!modelsLoaded) {
+    const modelUrl = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+    await Promise.all([
+      faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl),
+      faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
+      faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
+    ]);
+    modelsLoaded = true;
+  }
+  return faceapi;
 }
 
 /**
@@ -58,7 +64,7 @@ async function dataUrlToInput(dataUrl: string): Promise<faceapi.NetInput> {
  * Detect a face and extract its descriptor (128-d embedding).
  */
 async function getFaceDescriptor(dataUrl: string): Promise<{ descriptor: Float32Array; detection: any } | null> {
-  await loadModels();
+  const faceapi = await ensureFaceApi();
 
   const img = await dataUrlToInput(dataUrl);
 
