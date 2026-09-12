@@ -64,16 +64,14 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
           </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/api/verify/records/export?format=csv" download>
-              <Download className="h-4 w-4 mr-1" /> CSV
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/api/verify/records/export?format=json" download>
-              <Download className="h-4 w-4 mr-1" /> JSON
-            </a>
-          </Button>
+          <a href="/api/verify/records/export?format=csv" download
+             className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+            <Download className="h-4 w-4" /> CSV
+          </a>
+          <a href="/api/verify/records/export?format=json" download
+             className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+            <Download className="h-4 w-4" /> JSON
+          </a>
         </div>
       </div>
 
