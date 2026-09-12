@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractDocumentData } from "@/lib/vlm-service";
 import { normalizeForVlm, isLikelyTooLarge, parseDataUrl } from "@/lib/image-server";
-import { checkRateLimit } from "@/lib/rate-limit";
-import { logAudit, getClientIp } from "@/lib/audit-log";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit-log";
 import type { DocType } from "@/lib/verification-types";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   // Rate limit: 10 document extractions per minute per IP
   const limited = checkRateLimit(req, { maxRequests: 10, windowMs: 60_000, prefix: "doc" });
   if (limited) {
-    logAudit({ type: "rate_limited", ip: getClientIp(req), success: false, type: "rate_limited" } as any);
+    logAudit({ type: "rate_limited", ip: getClientIp(req), success: false });
     return limited;
   }
 
