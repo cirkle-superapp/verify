@@ -1,28 +1,28 @@
-import { PrismaClient } from "@prisma/client";
+/**
+ * Database client (backward-compatible export)
+ *
+ * This file re-exports from the new src/lib/db/index.ts dual-database layer.
+ * Existing routes that import { db } from "@/lib/db" continue to work —
+ * they get the TursoHttpClient shim (raw SQL), which is 100% functional.
+ *
+ * New routes should import from "@/lib/db/index" directly:
+ *   import { edgeDb, centralDb } from "@/lib/db";
+ *   import { verifications } from "@/lib/db/schema-postgres";
+ *   import { edgeVerifications } from "@/lib/db/schema-turso";
+ *
+ * Architecture:
+ *   db (raw SQL, backward compat) → TursoHttpClient
+ *   edgeDb (Drizzle ORM, typed)   → Turso libSQL
+ *   centralDb (Drizzle ORM, typed) → Neon Postgres
+ */
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: any | undefined;
-};
+// Re-export the new dual-database layer
+export { getEdgeDb, getCentralDb, edgeDb, centralDb } from "@/lib/db/index";
 
-function createDbClient(): any {
-  const databaseUrl = process.env.DATABASE_URL;
+// Re-export schemas for convenience
+export * from "@/lib/db/schema-postgres";
+export * from "@/lib/db/schema-turso";
 
-  // If DATABASE_URL is a libsql/turso URL, use our Turso HTTP shim.
-  // The @prisma/adapter-libsql has a bug where it rejects valid Turso
-  // tokens with HTTP 401. Our TursoHttpClient works correctly, so we use
-  // a Prisma-compatible shim backed by it.
-  if (databaseUrl && databaseUrl.startsWith("libsql:")) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const tursoDb = require("@/lib/db-turso").db;
-    return tursoDb;
-  }
-
-  // Local SQLite (default — Prisma with sqlite provider)
-  return new PrismaClient({
-    log: process.env.NODE_ENV !== "production" ? ["query"] : [],
-  });
-}
-
-export const db = globalForPrisma.prisma ?? createDbClient();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+// Backward-compatible: existing routes use `db` (TursoHttpClient shim)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+export const db = require("@/lib/db-turso").db;
