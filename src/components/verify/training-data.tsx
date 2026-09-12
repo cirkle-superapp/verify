@@ -227,7 +227,8 @@ export function TrainingData({ onBack }: { onBack: () => void }) {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>
