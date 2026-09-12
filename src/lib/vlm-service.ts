@@ -18,11 +18,50 @@ import {
   parseMrz,
 } from "@/lib/doc-validators";
 import { normalizeForVlm, isLikelyTooLarge } from "@/lib/image-server";
+import { writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
+/**
+ * Get the ZAI SDK instance.
+ *
+ * On Vercel/serverless, the .z-ai-config file isn't available (it's gitignored
+ * for security). We write it to /tmp from env vars on first call.
+ * Env vars needed: ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID
+ */
 async function getZai() {
   if (!zaiInstance) {
+    // Check if config file exists in standard locations
+    const configPaths = [
+      "/etc/.z-ai-config",
+      join(process.env.HOME || "/tmp", ".z-ai-config"),
+      join(process.cwd(), ".z-ai-config"),
+    ];
+    let hasConfig = configPaths.some((p) => {
+      try { return existsSync(p); } catch { return false; }
+    });
+
+    // If no config file but env vars are set, write a temp config
+    if (!hasConfig && process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY) {
+      const config = {
+        baseUrl: process.env.ZAI_BASE_URL,
+        apiKey: process.env.ZAI_API_KEY,
+        token: process.env.ZAI_TOKEN || "",
+        userId: process.env.ZAI_USER_ID || "",
+        chatId: process.env.ZAI_CHAT_ID || "",
+      };
+      const tmpConfig = join(tmpdir(), ".z-ai-config");
+      try {
+        writeFileSync(tmpConfig, JSON.stringify(config));
+        process.chdir(tmpdir());
+        hasConfig = true;
+      } catch (e) {
+        console.error("[getZai] Failed to write temp config:", e);
+      }
+    }
+
     zaiInstance = await ZAI.create();
   }
   return zaiInstance;
