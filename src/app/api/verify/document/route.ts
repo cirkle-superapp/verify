@@ -140,27 +140,55 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Run self-hosted OCR + AI CONSENSUS in parallel ────────────
+    // Strategy: start both tracks in parallel. If AI consensus finishes
+    // first (it usually does — 2-5s vs 30-60s for Tesseract cold-start),
+    // wait up to 8s for self-hosted to also complete. If self-hosted
+    // exceeds that window, return the consensus-only result so the user
+    // doesn't wait. This gives perfect outcome AND fast response.
     const consensusActive = isConsensusModeActive();
-    const [selfHostedResult, consensusResult] = await Promise.allSettled([
-      // Track 1: self-hosted OCR + rule-based parser
-      (async () => {
-        let frontOcr = await callOCRService(normalizedFront);
-        let backOcr = null;
-        if (!frontOcr) {
-          const ocrResults = await runOCRMulti(normalizedFront, backImage);
-          frontOcr = ocrResults.front;
-          backOcr = ocrResults.back;
-        } else if (backImage) {
-          backOcr = await callOCRService(backImage);
-        }
-        return extractDocumentSelfHosted(frontOcr as any, backOcr as any, docType, normalizedFront);
-      })(),
-      // Track 2: AI consensus (Gemini + OpenRouter + NVIDIA in parallel) — null if no providers
-      consensusActive ? extractDocumentConsensus(normalizedFront, backImage, docType) : Promise.resolve(null),
-    ]);
 
-    const selfHosted = selfHostedResult.status === "fulfilled" ? selfHostedResult.value : null;
-    const consensus = consensusResult.status === "fulfilled" ? consensusResult.value : null;
+    const selfHostedPromise: Promise<any> = (async () => {
+      let frontOcr = await callOCRService(normalizedFront);
+      let backOcr = null;
+      if (!frontOcr) {
+        const ocrResults = await runOCRMulti(normalizedFront, backImage);
+        frontOcr = ocrResults.front;
+        backOcr = ocrResults.back;
+      } else if (backImage) {
+        backOcr = await callOCRService(backImage);
+      }
+      return extractDocumentSelfHosted(frontOcr as any, backOcr as any, docType, normalizedFront);
+    })().catch((e) => {
+      console.error("[/api/verify/document] self-hosted track failed:", e?.message?.slice(0, 100));
+      return null;
+    });
+
+    const consensusPromise: Promise<any> = consensusActive
+      ? extractDocumentConsensus(normalizedFront, backImage, docType).catch((e) => {
+          console.error("[/api/verify/document] AI consensus track failed:", e?.message?.slice(0, 100));
+          return null;
+        })
+      : Promise.resolve(null);
+
+    // Race: if consensus is active and finishes, give self-hosted an
+    // 8s grace window to also complete. If self-hosted finishes first
+    // (or consensus is inactive), just wait for the other.
+    let selfHosted: any = null;
+    let consensus: any = null;
+
+    if (consensusActive) {
+      // Wait for consensus to finish first (the fast track)
+      consensus = await consensusPromise;
+      // Give self-hosted an 8s grace window to also complete
+      const graceDeadline = 8000;
+      const selfHostedTimeout = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), graceDeadline)
+      );
+      selfHosted = await Promise.race([selfHostedPromise, selfHostedTimeout]);
+    } else {
+      // No consensus — wait for self-hosted only
+      selfHosted = await selfHostedPromise;
+    }
 
     if (!selfHosted && !consensus) {
       throw new Error("Both OCR engines failed");
