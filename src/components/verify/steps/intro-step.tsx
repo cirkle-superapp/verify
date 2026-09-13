@@ -1,6 +1,7 @@
 "use client";
 
-import { ShieldCheck, ScanFace, FileText, Hand, ArrowRight, Sparkles, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShieldCheck, ScanFace, FileText, Hand, ArrowRight, Sparkles, Zap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,21 @@ const FEATURES = [
 
 export function IntroStep() {
   const goNext = useVerificationStore((s) => s.goNext);
+  const [providerCount, setProviderCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/verify/consensus-status")
+      .then((r) => r.json())
+      .then((j) => setProviderCount(j.totalProviders ?? 0))
+      .catch(() => setProviderCount(0));
+  }, []);
+
+  const consensusLabel = providerCount === null
+    ? "AI providers consensus"
+    : providerCount === 0
+      ? "Self-hosted AI consensus ready"
+      : `${providerCount} AI providers consensus`;
+
   return (
     <div className="space-y-8">
       {/* Hero with animated logo */}
@@ -60,6 +76,7 @@ export function IntroStep() {
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-2 text-xs">
+          <Badge variant="secondary" className="gap-1"><Users className="h-3 w-3" /> {consensusLabel}</Badge>
           <Badge variant="secondary" className="gap-1"><Zap className="h-3 w-3" /> 3-pass Arabic OCR</Badge>
           <Badge variant="secondary" className="gap-1"><ScanFace className="h-3 w-3" /> VLM face match</Badge>
           <Badge variant="secondary" className="gap-1"><Hand className="h-3 w-3" /> Liveness anti-spoof</Badge>

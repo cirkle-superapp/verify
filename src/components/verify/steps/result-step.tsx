@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database } from "lucide-react";
+import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { useVerificationStore } from "@/lib/verification-store";
 import { ScoreBadge, StatusBadge } from "@/components/verify/score-badge";
+import { ConsensusBadge } from "@/components/verify/consensus-badge";
 import { DOC_TYPES } from "@/lib/verification-types";
 import { toast } from "sonner";
 
@@ -148,6 +149,33 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
           <Progress value={overall} className={`h-2.5 ${passed ? "[&>div]:bg-teal-500" : "[&>div]:bg-rose-500"}`} />
         </CardContent>
       </Card>
+
+      {/* AI Consensus badges — show cross-checking across all 3 verification steps */}
+      {(docExtracted?.consensus || faceMatch?.consensus || livenessResult?.consensus) && (
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Users className="h-4 w-4 text-teal-600" />
+            Cross-checked by multiple AI providers
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ConsensusBadge
+              consensus={docExtracted?.consensus}
+              label="Document OCR"
+              labelAr="قراءة المستند"
+            />
+            <ConsensusBadge
+              consensus={faceMatch?.consensus}
+              label="Face Match"
+              labelAr="مطابقة الوجه"
+            />
+            <ConsensusBadge
+              consensus={livenessResult?.consensus}
+              label="Liveness"
+              labelAr="الحياة"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Score breakdown */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

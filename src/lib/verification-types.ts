@@ -88,6 +88,26 @@ export interface ExtractedDocumentData {
     genderInferred?: "Male" | "Female";
   };
   passes?: number; // number of VLM passes performed
+  /** Metadata describing how multiple AI providers cross-checked this result. */
+  consensus?: ConsensusInfo;
+}
+
+/** Metadata describing how multiple AI providers cross-checked a result. */
+export interface ConsensusInfo {
+  /** Total providers queried (e.g. 5) */
+  total: number;
+  /** Providers that returned a usable result (e.g. 4) */
+  successful: number;
+  /** Provider names that succeeded (e.g. ["gemini", "groq", "nvidia", ...]) */
+  providerNames: string[];
+  /** Overall agreement 0..1 — 1 = unanimous */
+  agreement: number;
+  /** Per-field agreement breakdown (0..1) */
+  fieldAgreement?: Record<string, number>;
+  /** Per-provider latency + success */
+  outcomes: { provider: string; success: boolean; latencyMs: number }[];
+  /** "unanimous" (≥95%) | "majority" (≥66%) | "split" (<66%) */
+  verdict: "unanimous" | "majority" | "split";
 }
 
 export interface FaceMatchResult {
@@ -95,6 +115,7 @@ export interface FaceMatchResult {
   similarity: number; // 0-100
   reasoning: string;
   samePerson: boolean;
+  consensus?: ConsensusInfo | null;
 }
 
 export interface LivenessResult {
@@ -102,6 +123,7 @@ export interface LivenessResult {
   score: number; // 0-100
   detectedActions: string[];
   reasoning: string;
+  consensus?: ConsensusInfo | null;
 }
 
 export type LivenessAction = "turn_left" | "turn_right" | "look_up" | "blink" | "smile";

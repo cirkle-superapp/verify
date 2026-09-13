@@ -1,4 +1,26 @@
-import ZAI from "z-ai-web-dev-sdk";
+/**
+ * Cirkle VLM Service — CONSENSUS MODE.
+ *
+ * Implements the user's explicit directive:
+ *   "be sure we use ai api in consensus they cross check with each other
+ *    to give perfect outcome"
+ *
+ * For every AI task, MULTIPLE providers are called IN PARALLEL and their
+ * outputs are cross-checked using:
+ *   - callVisionConsensus  → Gemini + OpenRouter + NVIDIA vision
+ *   - callTextConsensus    → Groq + Gemini + NVIDIA + OpenRouter + HuggingFace
+ *   - translateWithConsensus → Groq + Gemini (+ tie-breakers)
+ *   - consensusJsonFields  → per-field majority vote on structured JSON
+ *
+ * Each result carries a `consensus` object describing agreement %, the
+ * providers that succeeded, and a verdict (unanimous | majority | split).
+ *
+ * GRACEFUL DEGRADATION:
+ *   If NO AI providers are configured (no env vars), every function
+ *   returns null/empty. The API routes then fall back to self-hosted
+ *   engines only. This means the app always works — with or without keys.
+ */
+
 import type {
   ExtractedDocumentData,
   FaceMatchResult,
@@ -7,6 +29,7 @@ import type {
   LivenessAction,
   ImageQualityAssessment,
   FieldConfidence,
+  ConsensusInfo,
 } from "@/lib/verification-types";
 import {
   normalizeArabic,
@@ -16,141 +39,28 @@ import {
   digitsOnly,
   parseEgyptianNationalId,
   parseMrz,
+  fieldMatches,
 } from "@/lib/doc-validators";
 import { normalizeForVlm, isLikelyTooLarge } from "@/lib/image-server";
-import { writeFileSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-
-/**
- * Get the ZAI SDK instance.
- *
- * On Vercel/serverless, the .z-ai-config file isn't available (it's gitignored
- * for security). We write it to /tmp from env vars on first call.
- * Env vars needed: ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID
- */
-async function getZai() {
-  if (!zaiInstance) {
-    // Check if config file exists in standard locations
-    const configPaths = [
-      "/etc/.z-ai-config",
-      join(process.env.HOME || "/tmp", ".z-ai-config"),
-      join(process.cwd(), ".z-ai-config"),
-    ];
-    let hasConfig = configPaths.some((p) => {
-      try { return existsSync(p); } catch { return false; }
-    });
-
-    // If no config file but env vars are set, write a temp config
-    if (!hasConfig && process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY) {
-      const config = {
-        baseUrl: process.env.ZAI_BASE_URL,
-        apiKey: process.env.ZAI_API_KEY,
-        token: process.env.ZAI_TOKEN || "",
-        userId: process.env.ZAI_USER_ID || "",
-        chatId: process.env.ZAI_CHAT_ID || "",
-      };
-      const tmpConfig = join(tmpdir(), ".z-ai-config");
-      try {
-        writeFileSync(tmpConfig, JSON.stringify(config));
-        process.chdir(tmpdir());
-        hasConfig = true;
-      } catch (e) {
-        console.error("[getZai] Failed to write temp config:", e);
-      }
-    }
-
-    zaiInstance = await ZAI.create();
-  }
-  return zaiInstance;
-}
-
-interface ImageContent {
-  type: "text" | "image_url";
-  text?: string;
-  image_url?: { url: string };
-}
-
-function buildContent(prompt: string, images: string[]): ImageContent[] {
-  const content: ImageContent[] = [{ type: "text", text: prompt }];
-  for (const img of images) {
-    content.push({ type: "image_url", image_url: { url: img } });
-  }
-  return content;
-}
-
-/** Detect the VLM "image format/parse error" (code 1210) from any error shape. */
-function isImageFormatError(e: any): boolean {
-  const msg = String(e?.message || e?.toString?.() || "");
-  return (
-    msg.includes("1210") ||
-    msg.includes("图片输入格式") ||
-    msg.includes("图片解析错误") ||
-    /image.*(format|parse|invalid)/i.test(msg)
-  );
-}
-
-/**
- * Call the vision API with automatic image normalization + retry.
- * If the first call fails with an image-format error (1210), we re-compress
- * the images server-side and retry once. This fixes the common case where a
- * user uploads a large phone photo (HEIC, multi-MB JPEG) that the VLM rejects.
- */
-async function callVision(prompt: string, images: string[]): Promise<string> {
-  const zai = await getZai();
-
-  // Pre-emptively normalize any obviously-too-large images to avoid a wasted round-trip.
-  const prepared: string[] = [];
-  for (const img of images) {
-    if (isLikelyTooLarge(img)) {
-      prepared.push(await normalizeForVlm(img));
-    } else {
-      prepared.push(img);
-    }
-  }
-
-  const doCall = async (imgs: string[]) => {
-    try {
-      const response = await zai.chat.completions.createVision({
-        messages: [
-          {
-            role: "user",
-            content: buildContent(prompt, imgs),
-          },
-        ],
-        thinking: { type: "disabled" },
-      } as any);
-      const content = response.choices[0]?.message?.content ?? "";
-      if (!content) {
-        console.error("[callVision] VLM returned empty content. Response:", JSON.stringify(response).slice(0, 300));
-      }
-      return content;
-    } catch (e: any) {
-      console.error("[callVision] VLM call failed:", e?.message || e?.toString?.(), "| code:", e?.code);
-      throw e;
-    }
-  };
-
-  try {
-    return await doCall(prepared);
-  } catch (e: any) {
-    if (isImageFormatError(e)) {
-      // Re-compress ALL images (not just the big ones) and retry once
-      const recompressed: string[] = [];
-      for (const img of prepared) {
-        try {
-          recompressed.push(await normalizeForVlm(img));
-        } catch {
-          recompressed.push(img);
-        }
-      }
-      return await doCall(recompressed);
-    }
-    throw e;
-  }
-}
+import {
+  geminiVision,
+  openRouterVision,
+  nvidiaVision,
+  containsArabic,
+  containsLatin,
+  hasVisionProviders,
+  hasTextProviders,
+  configuredProviders,
+} from "@/lib/ai-router";
+import {
+  callVisionConsensus,
+  translateWithConsensus,
+  consensusJsonFields,
+  buildConsensusInfo,
+  mergeConsensusInfo,
+  emptyConsensusInfo,
+  type ConsensusOutcome,
+} from "@/lib/ai-consensus";
 
 function tryParseJson(text: string): any | null {
   if (!text) return null;
@@ -180,520 +90,532 @@ const DOC_LABELS: Record<DocType, string> = {
   residence: "Residence card for foreigners (بطاقة إقامة)",
 };
 
-/* ────────────────────────────────────────────────────────────────────────────
- * PASS 4: Arabic → English translation (using LLM, not VLM)
- * Translates Arabic names/fields to English for cross-validation.
- * ──────────────────────────────────────────────────────────────────────── */
-async function translateArabicToEnglish(arabicText: string): Promise<string> {
-  if (!arabicText || arabicText.trim().length === 0) return "";
-  const zai = await getZai();
-  try {
-    const response = await zai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional Arabic-to-English translator specializing in personal names and identity document fields. Translate the given Arabic text to English. For names, use the most common transliteration (e.g. محمد → Mohamed, أحمد → Ahmed, عبد الرحمن → Abdelrahman). Return ONLY the English translation, nothing else.",
-        },
-        { role: "user", content: arabicText },
-      ],
-      thinking: { type: "disabled" },
-    } as any);
-    return (response.choices[0]?.message?.content ?? "").trim();
-  } catch {
-    return "";
+/** Returns true if AI providers are configured (consensus mode is active). */
+export function isConsensusModeActive(): boolean {
+  return hasVisionProviders() || hasTextProviders();
+}
+
+/** Returns the list of configured provider names (for UI display). */
+export function getConfiguredProviders(): string[] {
+  return configuredProviders();
+}
+
+/** Run a vision prompt against multiple providers IN PARALLEL. */
+async function runVisionProviders(
+  prompt: string,
+  images: string[]
+): Promise<{ provider: string; raw: string; latencyMs: number }[]> {
+  if (!hasVisionProviders()) return [];
+
+  const tasks: { provider: string; fn: () => Promise<string> }[] = [];
+  tasks.push({ provider: "gemini-2.5-flash", fn: () => geminiVision(prompt, images) });
+  tasks.push({ provider: "openrouter-ling-vl", fn: () => openRouterVision(prompt, images) });
+  tasks.push({ provider: "nvidia-llama-vision", fn: () => nvidiaVision(prompt, images) });
+
+  const results = await Promise.allSettled(
+    tasks.map(async (t) => {
+      const start = Date.now();
+      const raw = await t.fn();
+      return { provider: t.provider, raw, latencyMs: Date.now() - start };
+    })
+  );
+  return results.map((r, i) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { provider: tasks[i].provider, raw: "", latencyMs: 0 }
+  );
+}
+
+function buildFieldConsensus(
+  providerResults: { provider: string; raw: string; latencyMs: number }[],
+  fieldNames: string[]
+): { merged: Record<string, any>; fieldAgreement: Record<string, number>; consensus: ConsensusInfo | null } {
+  const parsed = providerResults
+    .map((r) => ({ provider: r.provider, data: tryParseJson(r.raw) }))
+    .filter((p) => p.data);
+
+  if (parsed.length === 0) {
+    return { merged: {}, fieldAgreement: {}, consensus: emptyConsensusInfo() };
   }
+
+  const { merged, fieldAgreement } = consensusJsonFields(parsed, fieldNames);
+  const successful = parsed.length;
+  const total = providerResults.length;
+  const agreementValues = Object.values(fieldAgreement).filter((v) => v > 0);
+  const agreement = agreementValues.length > 0
+    ? agreementValues.reduce((a, b) => a + b, 0) / agreementValues.length
+    : 0;
+
+  const consensus: ConsensusInfo = {
+    total,
+    successful,
+    providerNames: parsed.map((p) => p.provider),
+    agreement: Math.round(agreement * 100) / 100,
+    fieldAgreement,
+    outcomes: providerResults.map((r) => ({
+      provider: r.provider, success: !!r.raw, latencyMs: r.latencyMs,
+    })),
+    verdict: agreement >= 0.95 ? "unanimous" : agreement >= 0.66 ? "majority" : "split",
+  };
+
+  return { merged, fieldAgreement, consensus };
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * PASS 5: English → Arabic transliteration (reverse direction)
- * ──────────────────────────────────────────────────────────────────────── */
-async function transliterateEnglishToArabic(englishText: string): Promise<string> {
-  if (!englishText || englishText.trim().length === 0) return "";
-  const zai = await getZai();
-  try {
-    const response = await zai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional English-to-Arabic transliterator specializing in personal names. Transliterate the given English name to Arabic script. Use standard transliteration (e.g. Mohamed → محمد, Ahmed → أحمد). Return ONLY the Arabic text, nothing else.",
-        },
-        { role: "user", content: englishText },
-      ],
-      thinking: { type: "disabled" },
-    } as any);
-    return (response.choices[0]?.message?.content ?? "").trim();
-  } catch {
-    return "";
-  }
-}
-
-/** Check if a string contains Arabic characters */
-function containsArabic(s?: string | null): boolean {
-  if (!s) return false;
-  return /[\u0600-\u06FF\u0750-\u077F]/.test(s);
-}
-
-/** Check if a string contains Latin characters */
-function containsLatin(s?: string | null): boolean {
-  if (!s) return false;
-  return /[a-zA-Z]/.test(s);
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * PASS 1: Image quality assessment (fast pre-check)
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─── Pass 1: Image quality assessment (consensus) ──────────────── */
 export async function assessImageQuality(
   frontImage: string,
   docType: DocType
-): Promise<ImageQualityAssessment> {
-  const prompt = `You are a document image quality auditor for ${DOC_LABELS[docType]}.
+): Promise<{ quality: ImageQualityAssessment | null; consensus: ConsensusInfo | null }> {
+  if (!hasVisionProviders()) return { quality: null, consensus: null };
 
-Analyze this document photo and assess its quality for automated OCR. Return STRICT JSON only:
+  const prompt = `You are a document image quality auditor for ${DOC_LABELS[docType]}.
+Analyze this document photo. Return STRICT JSON:
 {
   "overallQuality": 0.0-1.0,
-  "isDocument": boolean — is this actually a photo of an identity document (not random image)?
-  "isBlurry": boolean — is text blurry / out of focus?
-  "hasGlare": boolean — are there light reflections / glare hiding text?
-  "isFramedWell": boolean — is the document well-centered with margin around it?
-  "rotation": "none" | "slight" | "significant" — is the document rotated?
-  "lighting": "good" | "too_dark" | "too_bright" | "poor",
-  "isFullFrame": boolean — is the ENTIRE document visible (not cropped at edges)?
-  "issues": ["short list of detected problems"],
-  "suggestions": ["short actionable tips for the user to retake"]
-}
-Be concise. Be honest — if the image is poor, say so.`;
+  "isDocument": boolean,
+  "isBlurry": boolean,
+  "hasGlare": boolean,
+  "isFramedWell": boolean,
+  "rotation": "none"|"slight"|"significant",
+  "lighting": "good"|"too_dark"|"too_bright"|"poor",
+  "isFullFrame": boolean,
+  "issues": ["list"],
+  "suggestions": ["list"]
+}`;
+  const providerResults = await runVisionProviders(prompt, [frontImage]);
+  const { merged, consensus } = buildFieldConsensus(providerResults, [
+    "overallQuality", "isDocument", "isBlurry", "hasGlare", "isFramedWell",
+    "rotation", "lighting", "isFullFrame", "issues", "suggestions",
+  ]);
 
-  const raw = await callVision(prompt, [frontImage]);
-  const parsed = tryParseJson(raw);
-  if (!parsed) {
-    return {
-      overallQuality: 0.5,
-      isDocument: true,
-      isBlurry: false,
-      hasGlare: false,
-      isFramedWell: true,
-      rotation: "none",
-      lighting: "good",
-      isFullFrame: true,
-      issues: [],
-      suggestions: [],
-    };
+  if (!merged || !merged.overallQuality) {
+    return { quality: null, consensus };
   }
-  return {
-    overallQuality: typeof parsed.overallQuality === "number" ? parsed.overallQuality : 0.5,
-    isDocument: parsed.isDocument ?? true,
-    isBlurry: !!parsed.isBlurry,
-    hasGlare: !!parsed.hasGlare,
-    isFramedWell: !!parsed.isFramedWell,
-    rotation: parsed.rotation ?? "none",
-    lighting: parsed.lighting ?? "good",
-    isFullFrame: parsed.isFullFrame ?? true,
-    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
-    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+
+  const quality: ImageQualityAssessment = {
+    overallQuality: typeof merged.overallQuality === "number" ? merged.overallQuality : 0.5,
+    isDocument: merged.isDocument ?? true,
+    isBlurry: !!merged.isBlurry,
+    hasGlare: !!merged.hasGlare,
+    isFramedWell: !!merged.isFramedWell,
+    rotation: merged.rotation ?? "none",
+    lighting: merged.lighting ?? "good",
+    isFullFrame: merged.isFullFrame ?? true,
+    issues: Array.isArray(merged.issues) ? merged.issues : [],
+    suggestions: Array.isArray(merged.suggestions) ? merged.suggestions : [],
   };
+
+  return { quality, consensus };
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * PASS 2: Arabic-first OCR — read every Arabic glyph on the document
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─── Pass 2: Arabic OCR (consensus — pick most representative text) ── */
 export async function ocrArabicText(
   frontImage: string,
   backImage: string | null,
   docType: DocType
-): Promise<string> {
-  const prompt = `You are an expert Arabic OCR engine specialized in ${DOC_LABELS[docType]}.
+): Promise<{ text: string; consensus: ConsensusInfo | null }> {
+  if (!hasVisionProviders()) return { text: "", consensus: null };
 
-Read EVERY piece of ARABIC text visible on this document. Preserve:
-- Exact Arabic characters including diacritics (تشكيل) if present
-- Reading order (right-to-left, top-to-bottom)
-- Numbers in Arabic-Indic form (٠١٢٣) if printed that way, otherwise Western
-- Field labels AND their values (e.g. "الاسم: محمد أحمد")
-- The machine-readable zone if present (transcribe the < characters too)
-
-Output ONLY the raw Arabic text, line by line. Do NOT translate. Do NOT add English. Do NOT add commentary or markdown.`;
+  const prompt = `You are an expert Arabic OCR engine for ${DOC_LABELS[docType]}.
+Read EVERY piece of Arabic text visible. Preserve exact Arabic characters.
+Output ONLY the raw text, line by line. Do NOT translate or add commentary.`;
   const images = [frontImage];
   if (backImage) images.push(backImage);
-  return (await callVision(prompt, images)).trim();
+
+  const outcome = await callVisionConsensus(prompt, images);
+  return {
+    text: outcome.value.trim(),
+    consensus: buildConsensusInfo(outcome),
+  };
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * PASS 3: Structured field extraction (uses Arabic text as context)
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─── Pass 3: Structured field extraction (consensus) ──────────── */
 interface RawStructuredFields {
-  fullNameAr?: string;
-  fullNameEn?: string;
-  nationalId?: string;
-  birthDate?: string;
-  address?: string;
-  gender?: string;
-  documentNo?: string;
-  expiryDate?: string;
-  nationality?: string;
-  job?: string;
-  religion?: string;
-  maritalStatus?: string;
-  extraFields?: Record<string, string>;
-  rawText?: string;
-  hasPhoto?: boolean;
-  fieldConfidence?: FieldConfidence;
-  mrzLine1?: string;
-  mrzLine2?: string;
-  mrzLine3?: string;
+  fullNameAr?: string; fullNameEn?: string; nationalId?: string;
+  birthDate?: string; address?: string; gender?: string;
+  documentNo?: string; expiryDate?: string; nationality?: string;
+  job?: string; religion?: string; maritalStatus?: string;
+  extraFields?: Record<string, string>; rawText?: string;
+  hasPhoto?: boolean; fieldConfidence?: FieldConfidence;
+  mrzLine1?: string; mrzLine2?: string; mrzLine3?: string;
 }
+
+const STRUCTURED_FIELD_NAMES = [
+  "fullNameAr", "fullNameEn", "nationalId", "birthDate", "address",
+  "gender", "documentNo", "expiryDate", "nationality", "job",
+  "religion", "maritalStatus", "hasPhoto",
+  "mrzLine1", "mrzLine2", "mrzLine3",
+];
 
 async function extractStructuredFields(
-  frontImage: string,
-  backImage: string | null,
-  docType: DocType,
-  arabicText: string
-): Promise<RawStructuredFields> {
-  const prompt = `You are a forensic KYC field extractor for ${DOC_LABELS[docType]}.
+  frontImage: string, backImage: string | null, docType: DocType, arabicText: string
+): Promise<{ raw: RawStructuredFields; consensus: ConsensusInfo | null }> {
+  if (!hasVisionProviders()) {
+    return { raw: { rawText: arabicText }, consensus: emptyConsensusInfo() };
+  }
 
-I already ran an Arabic OCR pass on this document. Here is the raw Arabic text I read:
+  const prompt = `You are a forensic KYC field extractor for ${DOC_LABELS[docType]}.
+Arabic OCR pass result:
 """
 ${arabicText}
 """
-
-Now combine this Arabic text with what you can see in the image, and extract STRUCTURED fields with high precision.
-
-Return STRICT JSON only (no markdown) with this exact schema:
+Extract STRUCTURED fields. Return STRICT JSON:
 {
-  "fullNameAr": "الاسم الكامل بالعربية as printed (4 names: first father grandfather family). Preserve exact spelling. Empty string if absent.",
-  "fullNameEn": "Full name in English/Latin letters as printed. Empty string if absent.",
-  "nationalId": "الرقم القومي — the 14-digit Egyptian national number. ONLY DIGITS, no spaces. Empty string if this document type does not have one.",
-  "birthDate": "تاريخ الميلاد as printed. Prefer ISO YYYY-MM-DD if you can infer the year; otherwise keep the printed format.",
-  "address": "العنوان as printed (governorate, district, street). Empty string if absent.",
-  "gender": "Male/Female/ذكر/أنثى as printed.",
-  "documentNo": "رقم المستند — the document's own serial number (passport number, license number, residence number). NOT the national ID.",
-  "expiryDate": "تاريخ الانتهاء as printed, ISO YYYY-MM-DD if possible. Empty string if absent.",
-  "nationality": "الجنسية as printed (e.g. مصري / Egyptian). Empty string if absent.",
-  "job": "الوظيفة / المهنة as printed. Empty string if absent.",
-  "religion": "الديانة as printed — ONLY include if this document type shows it (Egyptian national ID has it; passports do not). Empty string otherwise.",
-  "maritalStatus": "الحالة الاجتماعية as printed. Empty string if absent.",
-  "extraFields": { "field_name": "value" } for any other readable fields,
-  "rawText": "full OCR dump of every readable line (Arabic + English + numbers) separated by newlines",
-  "hasPhoto": true if a person photo is visible,
-  "fieldConfidence": {
-    "fullNameAr": 0.0-1.0, "fullNameEn": 0.0-1.0, "nationalId": 0.0-1.0,
-    "birthDate": 0.0-1.0, "address": 0.0-1.0, "gender": 0.0-1.0,
-    "documentNo": 0.0-1.0, "expiryDate": 0.0-1.0, "nationality": 0.0-1.0,
-    "job": 0.0-1.0, "religion": 0.0-1.0, "maritalStatus": 0.0-1.0
-  },
-  "mrzLine1": "the first line of the MRZ if present, exactly 44 or 30 chars",
-  "mrzLine2": "the second line of the MRZ if present",
-  "mrzLine3": "the third line of the MRZ if present (TD1 format only)"
+  "fullNameAr": "Arabic name or empty string",
+  "fullNameEn": "English name or empty string",
+  "nationalId": "14-digit ID (digits only) or empty",
+  "birthDate": "ISO YYYY-MM-DD or empty",
+  "address": "or empty",
+  "gender": "Male/Female or empty",
+  "documentNo": "document serial or empty",
+  "expiryDate": "ISO or empty",
+  "nationality": "or empty",
+  "job": "or empty",
+  "religion": "or empty (only if shown on this doc type)",
+  "maritalStatus": "or empty",
+  "extraFields": {},
+  "rawText": "full OCR dump",
+  "hasPhoto": true,
+  "fieldConfidence": { "fullNameAr": 0.0-1.0, "fullNameEn": 0.0-1.0, "nationalId": 0.0-1.0, "birthDate": 0.0-1.0, "address": 0.0-1.0, "gender": 0.0-1.0, "documentNo": 0.0-1.0, "expiryDate": 0.0-1.0, "nationality": 0.0-1.0, "job": 0.0-1.0, "religion": 0.0-1.0, "maritalStatus": 0.0-1.0 },
+  "mrzLine1": "", "mrzLine2": "", "mrzLine3": ""
 }
-
-Rules:
-- For each field, only fill it if you are CONFIDENT it is actually printed and readable on the document. Otherwise return an empty string.
-- IMPORTANT: If a field is blank/empty/not printed on the document, you MUST return an empty string "". Do NOT guess, hallucinate, or infer a value. An empty field is a valid and common state.
-- Do NOT generate single-word values for the job/profession field. If the الوظيفة field is blank on the card, return "". If it has multi-word text like "حاصل على بكالوريوس صيدلة", return that exact text.
-- The nationalId MUST be exactly 14 digits for an Egyptian ID.
-- Preserve Arabic diacritics and exact letter forms.
-- fieldConfidence must reflect how clearly you could read each field (low for blurry/partial, and 0 for fields that are empty/absent).`;
+Rules: Empty string if absent. Do NOT hallucinate empty fields. nationalId must be 14 digits for Egyptian ID.`;
 
   const images = [frontImage];
   if (backImage) images.push(backImage);
-  const raw = await callVision(prompt, images);
-  const parsed = tryParseJson(raw);
-  if (!parsed) return { rawText: raw };
-  return parsed as RawStructuredFields;
+
+  const providerResults = await runVisionProviders(prompt, images);
+  const parsed = providerResults
+    .map((r) => ({ provider: r.provider, data: tryParseJson(r.raw) }))
+    .filter((p) => p.data);
+
+  if (parsed.length === 0) {
+    return { raw: { rawText: arabicText }, consensus: emptyConsensusInfo() };
+  }
+
+  const { merged, fieldAgreement } = consensusJsonFields(parsed, STRUCTURED_FIELD_NAMES);
+
+  // Average the fieldConfidence across providers
+  const fc: FieldConfidence = {};
+  const fcFields: (keyof FieldConfidence)[] = [
+    "fullNameAr", "fullNameEn", "nationalId", "birthDate", "address",
+    "gender", "documentNo", "expiryDate", "nationality", "job", "religion", "maritalStatus",
+  ];
+  for (const f of fcFields) {
+    const vals = parsed
+      .map((p) => p.data?.fieldConfidence?.[f])
+      .filter((v): v is number => typeof v === "number");
+    if (vals.length > 0) {
+      fc[f] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+    }
+  }
+
+  const successful = parsed.length;
+  const total = providerResults.length;
+  const agreementValues = Object.values(fieldAgreement).filter((v) => v > 0);
+  const agreement = agreementValues.length > 0
+    ? agreementValues.reduce((a, b) => a + b, 0) / agreementValues.length
+    : 0;
+
+  const consensus: ConsensusInfo = {
+    total,
+    successful,
+    providerNames: parsed.map((p) => p.provider),
+    agreement: Math.round(agreement * 100) / 100,
+    fieldAgreement,
+    outcomes: providerResults.map((r) => ({
+      provider: r.provider, success: !!r.raw, latencyMs: r.latencyMs,
+    })),
+    verdict: agreement >= 0.95 ? "unanimous" : agreement >= 0.66 ? "majority" : "split",
+  };
+
+  return {
+    raw: {
+      fullNameAr: merged.fullNameAr,
+      fullNameEn: merged.fullNameEn,
+      nationalId: merged.nationalId,
+      birthDate: merged.birthDate,
+      address: merged.address,
+      gender: merged.gender,
+      documentNo: merged.documentNo,
+      expiryDate: merged.expiryDate,
+      nationality: merged.nationality,
+      job: merged.job,
+      religion: merged.religion,
+      maritalStatus: merged.maritalStatus,
+      hasPhoto: merged.hasPhoto,
+      mrzLine1: merged.mrzLine1,
+      mrzLine2: merged.mrzLine2,
+      mrzLine3: merged.mrzLine3,
+      fieldConfidence: fc,
+      rawText: arabicText,
+    },
+    consensus,
+  };
 }
 
-/**
- * Full multi-pass document extraction: quality + Arabic OCR + structured → validate.
- *
- * Passes 1 (quality) and 2 (Arabic OCR) run in PARALLEL since they don't depend
- * on each other. Pass 3 (structured) runs after, using the Arabic text as context.
- * This cuts total latency by ~30% vs sequential execution.
- */
+/* ─── Full multi-pass extraction (CONSENSUS) ───────────────────── */
 export async function extractDocumentData(
-  frontImage: string,
-  backImage: string | null,
-  docType: DocType
-): Promise<ExtractedDocumentData> {
-  // Pass 1 + 2 in parallel (no dependency between them)
+  frontImage: string, backImage: string | null, docType: DocType
+): Promise<ExtractedDocumentData | null> {
+  if (!hasVisionProviders() && !hasTextProviders()) return null;
+
+  // Normalize large images
+  if (isLikelyTooLarge(frontImage)) {
+    try { frontImage = await normalizeForVlm(frontImage); } catch {}
+  }
+
+  // Pass 1+2 parallel: quality + Arabic OCR
   const [qualityResult, arabicResult] = await Promise.allSettled([
     assessImageQuality(frontImage, docType),
     ocrArabicText(frontImage, backImage, docType),
   ]);
+  const { quality: imageQuality, consensus: qualityConsensus } =
+    qualityResult.status === "fulfilled" ? qualityResult.value : { quality: null, consensus: null };
+  const { text: arabicText, consensus: ocrConsensus } =
+    arabicResult.status === "fulfilled" ? arabicResult.value : { text: "", consensus: null };
 
-  const imageQuality: ImageQualityAssessment | undefined =
-    qualityResult.status === "fulfilled" ? qualityResult.value : undefined;
-  const arabicText: string = arabicResult.status === "fulfilled" ? arabicResult.value : "";
-
-  // Debug: capture pass results for diagnostics
-  const _debug: any = {
-    qualityStatus: qualityResult.status,
-    qualityError: qualityResult.status === "rejected" ? String(qualityResult.reason?.message || qualityResult.reason) : undefined,
-    arabicStatus: arabicResult.status,
-    arabicError: arabicResult.status === "rejected" ? String(arabicResult.reason?.message || arabicResult.reason) : undefined,
-    arabicTextLength: arabicText.length,
-  };
-
-  // Pass 3: structured extraction (depends on arabicText for context)
+  // Pass 3: structured extraction (consensus)
   let raw: RawStructuredFields;
+  let structuredConsensus: ConsensusInfo | null = null;
   try {
-    raw = await extractStructuredFields(frontImage, backImage, docType, arabicText);
-  } catch (e) {
+    const r = await extractStructuredFields(frontImage, backImage, docType, arabicText);
+    raw = r.raw;
+    structuredConsensus = r.consensus;
+  } catch {
     raw = { rawText: arabicText };
   }
 
-  // Post-process & validate
+  // Post-process
   const nationalId = digitsOnly(raw.nationalId);
-  const idInfo = docType === "national_id" ? parseEgyptianNationalId(nationalId) : null;
+  const idInfo = docType === "national_id" && nationalId ? parseEgyptianNationalId(nationalId) : null;
   const mrzText = [raw.mrzLine1, raw.mrzLine2, raw.mrzLine3].filter(Boolean).join("\n");
   const mrzInfo = mrzText ? parseMrz(mrzText) : null;
 
-  // Strip field labels that the VLM sometimes includes in values (e.g. "الاسم: أحمد")
-  const stripLabel = (s?: string) => {
-    if (!s) return undefined;
-    return s.replace(/^(الاسم|الرقم القومي|تاريخ الميلاد|النوع|الديانة|الوظيفة|العنوان|الجنسية|الحالة الاجتماعية|رقم المستند|تاريخ الانتهاء|name|national id|date of birth|gender|religion|profession|address|nationality|marital status|document no|expiry)\s*:?\s*/i, "").trim() || undefined;
-  };
+  const stripLabel = (s?: string) => s ? s.replace(/^(الاسم|Name|الرقم القومي|National ID|تاريخ الميلاد|النوع|الديانة|الوظيفة|العنوان|الجنسية|الحالة|رقم المستند|تاريخ الانتهاء)\s*:?\s*/i, "").trim() || undefined : undefined;
 
   const fullNameAr = normalizeArabic(stripLabel(raw.fullNameAr)) || undefined;
   const fullNameEn = normalizeLatin(stripLabel(raw.fullNameEn)) || undefined;
   const gender = normalizeGender(stripLabel(raw.gender)) || mrzInfo?.gender || idInfo?.gender;
   const birthDate = normalizeDate(stripLabel(raw.birthDate)) || idInfo?.birthDate || mrzInfo?.birthDate;
   const expiryDate = normalizeDate(stripLabel(raw.expiryDate)) || mrzInfo?.expiryDate;
-
-  // Document number: prefer the VLM's read of the printed field, fall back to MRZ.
-  // (MRZ document number is sometimes truncated/placeholder; the printed serial is primary.)
   const documentNo = normalizeLatin(stripLabel(raw.documentNo)) || mrzInfo?.documentNumber;
   const nationality = normalizeLatin(stripLabel(raw.nationality)) || mrzInfo?.nationality;
 
-  // average of field confidences as overall
   const fc: FieldConfidence = raw.fieldConfidence || {};
   const fcValues = Object.values(fc).filter((v): v is number => typeof v === "number");
   const avgFieldConf = fcValues.length ? fcValues.reduce((a, b) => a + b, 0) / fcValues.length : 0.7;
+  const confidence = imageQuality ? Math.min(avgFieldConf, 0.4 + imageQuality.overallQuality * 0.6) : avgFieldConf;
 
-  const confidence = imageQuality
-    ? Math.min(avgFieldConf, 0.4 + imageQuality.overallQuality * 0.6)
-    : avgFieldConf;
+  let combinedConsensus = mergeConsensusInfo(qualityConsensus, ocrConsensus);
+  combinedConsensus = mergeConsensusInfo(combinedConsensus, structuredConsensus);
 
-  const resultBase: ExtractedDocumentData = {
-    fullNameAr,
-    fullNameEn,
-    nationalId,
-    birthDate,
+  const result: ExtractedDocumentData = {
+    fullNameAr, fullNameEn, nationalId, birthDate,
     address: normalizeArabic(stripLabel(raw.address)) || undefined,
-    gender,
-    documentNo,
-    expiryDate,
-    nationality,
-    // Job: if the field confidence is very low AND the value is a single short word,
-    // it's likely a hallucination. Drop it (return undefined) so the UI shows "—".
-    job: (() => {
-      const jobVal = normalizeArabic(stripLabel(raw.job)) || undefined;
-      const jobConf = raw.fieldConfidence?.job;
-      if (jobVal && typeof jobConf === "number" && jobConf < 0.5) {
-        const wordCount = jobVal.trim().split(/\s+/).length;
-        if (wordCount <= 1) return undefined; // likely hallucinated single word
-      }
-      return jobVal;
-    })(),
+    gender, documentNo, expiryDate, nationality,
+    job: normalizeArabic(stripLabel(raw.job)) || undefined,
     religion: normalizeArabic(stripLabel(raw.religion)) || undefined,
     maritalStatus: normalizeArabic(stripLabel(raw.maritalStatus)) || undefined,
-    rawText: raw.rawText || arabicText,
-    arabicText: arabicText || undefined,
-    hasPhoto: raw.hasPhoto ?? true,
-    confidence,
-    fieldConfidence: fc,
-    imageQuality,
-    mrzParsed: !!mrzInfo,
-    extraFields: { ...(raw.extraFields || {}), _debug },
-    validationFlags: {
-      nationalIdValid: idInfo?.isValid,
-      nationalIdChecksumValid: idInfo?.checksumValid,
-      genderInferred: idInfo?.gender,
-    },
-    passes: 4, // now 4 passes: quality + Arabic OCR + structured + translation
+    extraFields: raw.extraFields || {},
+    rawText: raw.rawText || arabicText, arabicText: arabicText || undefined,
+    hasPhoto: raw.hasPhoto ?? true, confidence, fieldConfidence: fc,
+    imageQuality: imageQuality || undefined, mrzParsed: !!mrzInfo,
+    validationFlags: { nationalIdValid: idInfo?.isValid, nationalIdChecksumValid: idInfo?.checksumValid, genderInferred: idInfo?.gender },
+    passes: 4,
+    consensus: combinedConsensus,
   };
 
-  // ─── PASS 4: Cross-validation + translation ────────────────────────────
-  // If we have Arabic name but no English, translate it.
-  // If we have English name but no Arabic, transliterate it.
-  // Cross-validate: if both present, check they match (via reverse translation).
-  const result: ExtractedDocumentData = { ...resultBase };
-
-  // Fill missing fullNameEn by translating Arabic → English
+  // Pass 4: Cross-validation + translation (consensus)
   if (containsArabic(result.fullNameAr) && !containsLatin(result.fullNameEn)) {
-    const translated = await translateArabicToEnglish(result.fullNameAr);
-    if (translated && containsLatin(translated)) {
-      result.fullNameEn = normalizeLatin(translated);
+    const outcome = await translateWithConsensus(result.fullNameAr, "ar-to-en");
+    if (outcome.value && containsLatin(outcome.value)) {
+      result.fullNameEn = normalizeLatin(outcome.value);
+      result.consensus = mergeConsensusInfo(result.consensus, buildConsensusInfo(outcome));
     }
   }
-  // Fill missing fullNameAr by transliterating English → Arabic
   if (containsLatin(result.fullNameEn) && !containsArabic(result.fullNameAr)) {
-    const transliterated = await transliterateEnglishToArabic(result.fullNameEn);
-    if (transliterated && containsArabic(transliterated)) {
-      result.fullNameAr = normalizeArabic(transliterated);
+    const outcome = await translateWithConsensus(result.fullNameEn, "en-to-ar");
+    if (outcome.value && containsArabic(outcome.value)) {
+      result.fullNameAr = normalizeArabic(outcome.value);
+      result.consensus = mergeConsensusInfo(result.consensus, buildConsensusInfo(outcome));
     }
   }
-  // Cross-validate: if both present, check consistency via reverse translation
   if (containsArabic(result.fullNameAr) && containsLatin(result.fullNameEn)) {
-    const arToEn = await translateArabicToEnglish(result.fullNameAr);
-    // Store the cross-validated translations in extraFields for audit
-    if (!result.extraFields) result.extraFields = {};
-    if (arToEn) result.extraFields["_nameEn_fromArabic"] = arToEn;
-    // If the VLM's English name doesn't match the translated Arabic, prefer the
-    // translated-from-Arabic version (Arabic is usually the primary on the card)
-    if (arToEn && containsLatin(arToEn) && result.fullNameEn) {
-      const { fieldMatches } = await import("@/lib/doc-validators");
-      if (!fieldMatches(arToEn, result.fullNameEn)) {
-        result.extraFields["_nameEn_original"] = result.fullNameEn;
-        result.fullNameEn = normalizeLatin(arToEn);
+    const outcome = await translateWithConsensus(result.fullNameAr, "ar-to-en");
+    if (outcome.value && containsLatin(outcome.value)) {
+      if (!result.extraFields) result.extraFields = {};
+      result.extraFields._nameEn_fromArabic = outcome.value;
+      if (!fieldMatches(outcome.value, result.fullNameEn)) {
+        result.extraFields._nameEn_original = result.fullNameEn;
+        result.fullNameEn = normalizeLatin(outcome.value);
       }
+      result.consensus = mergeConsensusInfo(result.consensus, buildConsensusInfo(outcome));
     }
   }
 
-  // ─── PASS 5: Country detection + spec validation ──────────────────────
-  // Use the worldwide document specs catalog to:
-  //  - Detect the issuing country from the national ID format
-  //  - Validate the national ID against the country's pattern
-  //  - Store detected country + validation flags in extraFields
+  // Pass 5: Country detection
   try {
     const { DOCUMENT_SPECS } = await import("@/lib/doc-specs/catalog");
     if (result.nationalId) {
-      // Find a spec whose nationalIdPattern matches
       for (const spec of DOCUMENT_SPECS) {
         if (spec.nationalIdPattern && spec.docType === docType) {
           try {
-            const re = new RegExp(spec.nationalIdPattern);
-            if (re.test(result.nationalId)) {
+            if (new RegExp(spec.nationalIdPattern).test(result.nationalId)) {
               if (!result.extraFields) result.extraFields = {};
-              result.extraFields["_detectedCountry"] = spec.country;
-              result.extraFields["_detectedCountryName"] = spec.countryName;
-              result.extraFields["_idPatternMatched"] = "true";
-              result.extraFields["_idExpectedLength"] = String(spec.nationalIdLength || "?");
+              result.extraFields._detectedCountry = spec.country;
+              result.extraFields._detectedCountryName = spec.countryName;
               break;
             }
-          } catch {
-            // invalid regex → skip
-          }
+          } catch {}
         }
       }
     }
-  } catch {
-    // catalog import is optional
-  }
+  } catch {}
 
   return result;
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Face match (unchanged signature)
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─── Face match (CONSENSUS across vision providers) ────────────── */
 export async function matchFace(
-  selfieImage: string,
-  documentImage: string
-): Promise<FaceMatchResult> {
+  selfieImage: string, documentImage: string
+): Promise<FaceMatchResult | null> {
+  if (!hasVisionProviders()) return null;
+
   const prompt = `You are a forensic face-comparison expert.
+Image 1: a selfie. Image 2: an identity document with a photo.
+Compare the faces. Return STRICT JSON:
+{ "isMatch": boolean, "samePerson": boolean, "similarity": 0-100, "reasoning": "explanation" }
+A genuine match should score 70+.`;
 
-I am giving you TWO images:
-- Image 1: a selfie photo of a person taken live.
-- Image 2: an identity document containing a passport-style photo of the claimed person.
+  const providers = await runVisionProviders(prompt, [selfieImage, documentImage]);
+  const parsed = providers
+    .map((r) => ({ provider: r.provider, data: tryParseJson(r.raw) }))
+    .filter((p) => p.data);
 
-Compare the face in the selfie with the face photo embedded in the document.
-
-Return STRICT JSON only (no markdown) with this exact schema:
-{
-  "isMatch": boolean — true if you are reasonably confident it is the SAME person,
-  "samePerson": boolean — same as isMatch (duplicate for clarity),
-  "similarity": number 0-100 — your estimated visual similarity score,
-  "reasoning": "short explanation of facial features compared (eyes, nose, mouth, jaw, ears, skin tone, hair). Mention any anti-spoofing concerns (e.g. photo of a screen)."
-}
-
-Be strict but fair. Account for lighting, angle, and minor appearance changes. A genuine match should score 70+. If faces are clearly different people, return isMatch=false, similarity below 50.`;
-
-  const raw = await callVision(prompt, [selfieImage, documentImage]);
-  const parsed = tryParseJson(raw);
-  if (!parsed) {
-    return {
-      isMatch: false,
-      samePerson: false,
-      similarity: 0,
-      reasoning: raw || "Could not analyze face match.",
-    };
+  if (parsed.length === 0) {
+    return null;
   }
+
+  const { merged, fieldAgreement } = consensusJsonFields(parsed, [
+    "isMatch", "samePerson", "similarity", "reasoning",
+  ]);
+
+  const similarities = parsed
+    .map((p) => Number(p.data?.similarity))
+    .filter((n) => !isNaN(n));
+  const avgSim = similarities.length > 0
+    ? similarities.reduce((a, b) => a + b, 0) / similarities.length
+    : 0;
+
+  // Consensus: match requires MAJORITY of providers to say yes,
+  // AND average similarity >= 60. Cross-checked.
+  const matchCount = parsed.filter((p) => p.data?.isMatch === true).length;
+  const isMatch = matchCount >= Math.ceil(parsed.length / 2) && avgSim >= 60;
+
+  const agreement =
+    parsed.length === 1 ? 0.5 :
+    (fieldAgreement.isMatch ?? 0) * 0.5 +
+    (fieldAgreement.similarity ?? 0) * 0.5;
+
+  const consensus: ConsensusInfo = {
+    total: providers.length,
+    successful: parsed.length,
+    providerNames: parsed.map((p) => p.provider),
+    agreement: Math.round(agreement * 100) / 100,
+    fieldAgreement,
+    outcomes: providers.map((r) => ({
+      provider: r.provider, success: !!r.raw, latencyMs: r.latencyMs,
+    })),
+    verdict: agreement >= 0.95 ? "unanimous" : agreement >= 0.66 ? "majority" : "split",
+  };
+
   return {
-    isMatch: !!parsed.isMatch,
-    samePerson: !!parsed.samePerson,
-    similarity: typeof parsed.similarity === "number" ? parsed.similarity : 0,
-    reasoning: parsed.reasoning || "",
+    isMatch,
+    samePerson: !!merged.samePerson || isMatch,
+    similarity: Math.round(avgSim),
+    reasoning: typeof merged.reasoning === "string" ? merged.reasoning : "",
+    consensus,
   };
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Liveness check (unchanged)
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─── Liveness check (CONSENSUS across vision providers) ────────── */
 export async function checkLiveness(
-  frames: string[],
-  performedActions: LivenessAction[]
-): Promise<LivenessResult> {
-  const actionLabels = performedActions
-    .map((a) => {
-      const map: Record<LivenessAction, string> = {
-        turn_left: "turned head LEFT",
-        turn_right: "turned head RIGHT",
-        look_up: "looked UP",
-        blink: "blinked their eyes",
-        smile: "smiled",
-      };
-      return map[a];
-    })
-    .join(", then ");
+  frames: string[], performedActions: LivenessAction[]
+): Promise<LivenessResult | null> {
+  if (!hasVisionProviders()) return null;
 
-  const prompt = `You are a liveness / anti-spoofing detection system.
+  const actionLabels = performedActions.map(a => ({
+    turn_left: "turned head LEFT", turn_right: "turned head RIGHT",
+    look_up: "looked UP", blink: "blinked", smile: "smiled",
+  }[a] || a)).join(", then ");
+  const prompt = `You are a liveness detection system. Frames captured while user: ${actionLabels}.
+Analyze for real movement vs static photo. Return STRICT JSON:
+{ "isLive": boolean, "score": 0-100, "detectedActions": ["list"], "reasoning": "explanation" }`;
 
-You are given a sequence of webcam frames captured in order while the user was asked to perform these live movements: ${actionLabels}.
+  const providers = await runVisionProviders(prompt, frames);
+  const parsed = providers
+    .map((r) => ({ provider: r.provider, data: tryParseJson(r.raw) }))
+    .filter((p) => p.data);
 
-Analyze the sequence for:
-1. Real human head and facial movement between frames (NOT a static photo held up to the camera).
-2. Whether the requested movements are visible in the frame sequence.
-3. Signs of spoofing: printed photo, screen replay, mask, deepfake artifacts, no movement between frames.
-
-Return STRICT JSON only (no markdown):
-{
-  "isLive": boolean — true if you are confident this is a real live human performing the movements,
-  "score": number 0-100 — liveness confidence score,
-  "detectedActions": ["list of action labels you actually observed among: turn_left, turn_right, look_up, blink, smile"],
-  "reasoning": "short explanation: what movement you saw, any spoofing indicators, image quality notes."
-}
-
-A genuine live session with visible movement should score 70+. A single static face across all frames should score < 40.`;
-
-  const raw = await callVision(prompt, frames);
-  const parsed = tryParseJson(raw);
-  if (!parsed) {
-    return {
-      isLive: false,
-      score: 0,
-      detectedActions: [],
-      reasoning: raw || "Could not analyze liveness.",
-    };
+  if (parsed.length === 0) {
+    return null;
   }
+
+  const { merged, fieldAgreement } = consensusJsonFields(parsed, [
+    "isLive", "score", "reasoning",
+  ]);
+
+  const scores = parsed
+    .map((p) => Number(p.data?.score))
+    .filter((n) => !isNaN(n));
+  const avgScore = scores.length > 0
+    ? scores.reduce((a, b) => a + b, 0) / scores.length
+    : 0;
+
+  const liveCount = parsed.filter((p) => p.data?.isLive === true).length;
+  const isLive = liveCount >= Math.ceil(parsed.length / 2) && avgScore >= 60;
+
+  const allActions = parsed.flatMap((p) => Array.isArray(p.data?.detectedActions) ? p.data.detectedActions : []);
+  const actionCounts: Record<string, number> = {};
+  for (const a of allActions) {
+    actionCounts[String(a).toLowerCase()] = (actionCounts[String(a).toLowerCase()] || 0) + 1;
+  }
+  const detectedActions = Object.entries(actionCounts)
+    .filter(([, c]) => c >= Math.ceil(parsed.length / 2))
+    .map(([a]) => a);
+
+  const agreement =
+    parsed.length === 1 ? 0.5 :
+    (fieldAgreement.isLive ?? 0) * 0.6 + (fieldAgreement.score ?? 0) * 0.4;
+
+  const consensus: ConsensusInfo = {
+    total: providers.length,
+    successful: parsed.length,
+    providerNames: parsed.map((p) => p.provider),
+    agreement: Math.round(agreement * 100) / 100,
+    fieldAgreement,
+    outcomes: providers.map((r) => ({
+      provider: r.provider, success: !!r.raw, latencyMs: r.latencyMs,
+    })),
+    verdict: agreement >= 0.95 ? "unanimous" : agreement >= 0.66 ? "majority" : "split",
+  };
+
   return {
-    isLive: !!parsed.isLive,
-    score: typeof parsed.score === "number" ? parsed.score : 0,
-    detectedActions: Array.isArray(parsed.detectedActions) ? parsed.detectedActions : [],
-    reasoning: parsed.reasoning || "",
+    isLive,
+    score: Math.round(avgScore),
+    detectedActions,
+    reasoning: typeof merged.reasoning === "string" ? merged.reasoning : "",
+    consensus,
   };
 }
 
 export async function detectFacePresence(image: string): Promise<{ hasFace: boolean; isLikelyLive: boolean; reasoning: string }> {
-  const prompt = `Analyze this webcam frame. Return STRICT JSON:
-{
-  "hasFace": boolean — is a single clear human face visible and centered?
-}
-Also briefly (in "reasoning") note if it looks like a real webcam shot vs a photo of a photo / screen.`;
-  const raw = await callVision(prompt, [image]);
-  const parsed = tryParseJson(raw);
-  return {
-    hasFace: !!parsed?.hasFace,
-    isLikelyLive: !!parsed?.hasFace,
-    reasoning: parsed?.reasoning || (parsed ? "Face detected." : "No parseable response."),
-  };
+  if (!hasVisionProviders()) {
+    return { hasFace: false, isLikelyLive: false, reasoning: "No AI providers configured" };
+  }
+  const prompt = `Analyze this webcam frame. Return STRICT JSON: { "hasFace": boolean }`;
+  const outcome = await callVisionConsensus(prompt, [image]);
+  const parsed = tryParseJson(outcome.value);
+  return { hasFace: !!parsed?.hasFace, isLikelyLive: !!parsed?.hasFace, reasoning: parsed?.reasoning || "Analyzed." };
 }
