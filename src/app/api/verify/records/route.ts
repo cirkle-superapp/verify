@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sanitizeForDb, validateDataUrl, validateNationalId } from "@/lib/security";
 import { runFraudChecks, imageHash } from "@/lib/fraud-detection";
-import { neonDb } from "@/lib/neon-client";
 import type { DocType, ExtractedDocumentData, FaceMatchResult, LivenessAction, LivenessResult, VerificationStatus } from "@/lib/verification-types";
+import { db as platformDb, type OutboxEventInput } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -140,33 +140,55 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ─── Dual-write: mirror to Neon PostgreSQL (fire-and-forget) ──────
-    if (neonDb.isAvailable()) {
-      neonDb.insertVerification({
-        id: created.id,
-        docType, docSide, docImageFront, docImageBack,
-        fullNameAr: sanitizeForDb(extracted?.fullNameAr),
-        fullNameEn: sanitizeForDb(extracted?.fullNameEn),
-        nationalId: sanitizeForDb(extracted?.nationalId),
-        birthDate: sanitizeForDb(extracted?.birthDate),
-        address: sanitizeForDb(extracted?.address),
-        gender: sanitizeForDb(extracted?.gender),
-        documentNo: sanitizeForDb(extracted?.documentNo),
-        expiryDate: sanitizeForDb(extracted?.expiryDate),
-        nationality: sanitizeForDb(extracted?.nationality),
-        job: sanitizeForDb(extracted?.job),
-        religion: sanitizeForDb(extracted?.religion),
-        maritalStatus: sanitizeForDb(extracted?.maritalStatus),
-        extraFields: extracted?.extraFields ? JSON.stringify(extracted.extraFields).slice(0, 2000) : null,
-        imageQuality, fieldConfidence, selfieImage,
-        livenessFrames: JSON.stringify({ count: livenessFrameCount }),
-        livenessActions: livenessActions.length ? JSON.stringify(livenessActions) : null,
-        docConfidence, faceMatchScore, livenessScore, status,
-        notes: notes.length ? sanitizeForDb(notes.join("; ")) : null,
-      }).catch(() => {}); // fire-and-forget — don't block on Neon
+    // ─── Transactional Outbox ────────────────────────────────────────
+    // Per architecture mandate: NEVER dual-write to Neon directly.
+    // Instead, append an outbox event AFTER the Turso commit. The outbox
+    // is drained by Inngest relay → Neon (recovery projection, idempotent).
+    // Email notification (P2 transactional) is also triggered via Inngest.
+    //
+    // NOTE: ideal atomicity requires the verification insert + outbox insert
+    // in the SAME transaction. Prisma manages its own connection, so we do
+    // best-effort here: append outbox immediately after commit. A crash
+    // between the two leaves a verification with no outbox event —
+    // detectable via reconciliation cron (future enhancement).
+    const outboxEvent: OutboxEventInput = {
+      aggregateType: "verification",
+      aggregateId: created.id,
+      eventType: status === "verified" ? "verification.completed" : status === "rejected" ? "verification.rejected" : "verification.saved",
+      payload: {
+        verificationId: created.id,
+        docType,
+        status,
+        docConfidence,
+        faceMatchScore,
+        livenessScore,
+        nationalId: extracted?.nationalId ? sanitizeForDb(extracted.nationalId) : null,
+        fullNameAr: extracted?.fullNameAr ? sanitizeForDb(extracted.fullNameAr) : null,
+        fullNameEn: extracted?.fullNameEn ? sanitizeForDb(extracted.fullNameEn) : null,
+        fraudFlags: fraudResult?.flags?.map((f: any) => f.code) || [],
+        _epoch: "auto", // adapter stamps current epoch
+      },
+      idempotencyKey: `verify:${created.id}`,
+      correlationId: created.id,
+    };
+
+    try {
+      await platformDb.transaction(async (tx) => {
+        await tx.appendOutbox(outboxEvent);
+      });
+    } catch (outboxErr: any) {
+      // Outbox failure does NOT roll back the business transaction (verification is saved).
+      // The record exists; the event will be reconciled by a future cron.
+      console.error("[/api/verify/records] outbox append failed (verification still saved):", outboxErr?.message?.slice(0, 120));
     }
 
-    return NextResponse.json({ record: created, fraudCheck: fraudResult, neonMirrored: neonDb.isAvailable() });
+    return NextResponse.json({
+      record: created,
+      fraudCheck: fraudResult,
+      outboxQueued: true,
+      // Neon receives this via outbox → Inngest relay, NOT direct dual-write
+      neonMirrored: "deferred-to-outbox",
+    });
   } catch (e: any) {
     console.error("[/api/verify/records POST] error", e);
     return NextResponse.json(

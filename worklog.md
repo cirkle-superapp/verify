@@ -878,3 +878,72 @@ Stage Summary:
 - Committed: f5693e4
 - When deployed to Vercel, all 5 providers will respond → true multi-provider
   consensus with high agreement scores and "unanimous"/"majority" verdicts
+
+---
+Task ID: 12-a
+Agent: frontend-styling-expert
+Task: Build infrastructure + cost dashboard UI
+
+Work Log:
+- Read worklog + page.tsx + specs-browser.tsx + history-view.tsx to learn
+  existing patterns (NavButton, onBack prop, Skeleton/RefreshCw header).
+- Read src/lib/platform/index.ts + ports.ts to mirror exact response shape
+  (EpochState, QuotaSnapshot, CircuitSnapshot, ReplicationState).
+- Created src/components/verify/infra-dashboard.tsx (813 lines, fully typed):
+  * Fetches /api/platform/status on mount + auto-refresh every 30s
+    (silent refresh on the interval, full loading state on manual refresh).
+  * Live countdown "auto in Ns" badge in header next to last-fetched time.
+  * Loading skeleton (7-card grid placeholder + epoch banner + breakers + cost model).
+  * Error state card (rose, with Retry button) when fetch fails.
+  * Epoch banner: "Epoch 41 · Turso Primary" prominently, with reason,
+    fencing token (mono, truncated), promotedAt timestamp, "promotion is
+    controlled — never automatic" italic note.
+  * Provider cards grid (3 cols on lg):
+      - Turso: role/health badges, latency, writable, detail; teal accent.
+      - Neon: role/health badges, latency, recoveryState, lag events/seconds,
+        DB epoch vs current epoch comparison (green when matching), last
+        replicated event id; amber accent.
+      - Vercel Blob: 3 quota rows (storage, ops, transfer) each with
+        used/limit, percent, level-colored bar, remaining.
+      - Brevo: daily quota bar with resetsAt countdown.
+      - SMS: customer-funded rose badge, used/limit, "no platform cost" note,
+        quote→authorize flow reminder.
+      - Inngest: workflow health, operational/degraded status.
+      - Cloudflare: amber edge badge, "architectural reminder, no live quota".
+  * Circuit breakers table (shadcn Table): provider, colored state pill
+    (CLOSED=teal, OPEN=rose, HALF_OPEN=amber), failure/success counts,
+    lastFailureAt + openedAt in "Xm ago" form.
+  * Cost model section (2-col): Platform-funded card (teal, fail-closed on
+    quota badge) vs Customer-funded card (rose, explicit auth required badge),
+    each with descriptive copy + provider badges.
+  * Color rules strictly enforced: ok/monitoring=teal, warning=amber,
+    restrict=orange, emergency/exhausted=rose. NO indigo/blue anywhere.
+  * Uses only existing shadcn/ui: Card, CardContent, CardHeader, CardTitle,
+    Badge, Button, Progress (refused — built custom div bars for level colors
+    since shadcn Progress only supports primary color), Skeleton, Table*.
+- Wired into src/app/page.tsx:
+  * Added Gauge to lucide-react import.
+  * Added "infra" to View union type.
+  * Added NavButton (icon=Gauge, label="Infra") after Specs, before Lab.
+  * Added render branch: view === "infra" ? <InfraDashboard onBack=...>.
+- Fixed pre-existing backend bug in src/lib/platform/index.ts:
+  PlatformError was exported both as type AND value (duplicate-export
+  parse error → /api/platform/status returned HTTP 500). Removed it from
+  the `export type {}` block; kept the value export on line 39.
+- After fix, API returns 200 with full status payload; dashboard renders
+  real data (Turso/Neon probe as unhealthy in sandbox — expected, since
+  Turso/Blob/Brevo API keys aren't configured here; UI handles ok=false
+  correctly with rose "unhealthy" badge).
+
+Lint: `bun run lint` clean (0 errors, 0 warnings).
+TypeScript: no errors in new/modified files (only pre-existing TS errors
+in unrelated files: image-server.ts, neon-client.ts, vlm-service.ts, etc.).
+
+Stage Summary:
+- New component: src/components/verify/infra-dashboard.tsx (813 lines)
+- New view wired into main navigation (page.tsx)
+- Backend duplicate-export bug fixed → /api/platform/status now returns 200
+- All 10 task requirements satisfied (fetch + refresh + 7 provider cards +
+  epoch banner + breakers table + cost model section + level colors +
+  shadcn components + no indigo/blue + skeleton/error states + 30s auto)
+- Palette: teal/amber/rose/orange only (matches Cirkle brand from globals.css)
