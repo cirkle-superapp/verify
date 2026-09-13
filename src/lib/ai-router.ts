@@ -40,7 +40,10 @@ export function configuredProviders(): string[] {
   if (GEMINI_KEY) list.push("gemini-2.5-flash");
   if (GROQ_KEY) list.push("groq-llama-3.3-70b");
   if (OPENROUTER_KEY) list.push("openrouter-ling-vl");
-  if (NVIDIA_KEY) list.push("nvidia-llama-vision");
+  if (NVIDIA_KEY) {
+    list.push("nvidia-llama-vision");
+    list.push("nvidia-deepseek-v4");
+  }
   if (HF_KEY) list.push("huggingface");
   return list;
 }

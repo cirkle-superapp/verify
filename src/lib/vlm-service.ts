@@ -100,6 +100,9 @@ export function getConfiguredProviders(): string[] {
   return configuredProviders();
 }
 
+/** Per-provider timeout — prevents a hanging provider from blocking consensus. */
+const PROVIDER_TIMEOUT_MS = 15_000;
+
 /** Run a vision prompt against multiple providers IN PARALLEL. */
 async function runVisionProviders(
   prompt: string,
@@ -115,7 +118,10 @@ async function runVisionProviders(
   const results = await Promise.allSettled(
     tasks.map(async (t) => {
       const start = Date.now();
-      const raw = await t.fn();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), PROVIDER_TIMEOUT_MS)
+      );
+      const raw = await Promise.race([t.fn(), timeout]);
       return { provider: t.provider, raw, latencyMs: Date.now() - start };
     })
   );

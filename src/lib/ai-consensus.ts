@@ -93,13 +93,27 @@ function verdictFromAgreement(agreement: number, successful: number): "unanimous
   return "split";
 }
 
+/**
+ * Run tasks in parallel with a per-task timeout.
+ *
+ * If a task exceeds PER_TASK_TIMEOUT_MS, it's marked as failed (timeout)
+ * so the consensus can proceed with whoever finished. This prevents a
+ * single hanging provider (e.g. network-blocked NVIDIA) from blocking the
+ * whole consensus pipeline.
+ */
+const PER_TASK_TIMEOUT_MS = 15_000; // 15s per provider — fast-fail blocked providers
+
 async function runParallel<T>(
   tasks: { provider: string; fn: () => Promise<T> }[]
 ): Promise<ProviderOutcome<T>[]> {
   const results = await Promise.allSettled(
     tasks.map(async (t) => {
       const start = Date.now();
-      const result = await t.fn();
+      // Race the task against a timeout
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), PER_TASK_TIMEOUT_MS)
+      );
+      const result = await Promise.race([t.fn(), timeout]);
       return { provider: t.provider, success: true, result, latencyMs: Date.now() - start };
     })
   );
