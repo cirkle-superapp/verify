@@ -79,28 +79,28 @@ function toOutboxRow(e: OutboxEventInput, eventId: string): Record<string, unkno
   };
 }
 
-/** Ensure the outbox table exists (idempotent DDL). */
-const OUTBOX_DDL = `
-CREATE TABLE IF NOT EXISTS outbox_events (
-  event_id TEXT PRIMARY KEY NOT NULL,
-  aggregate_type TEXT NOT NULL,
-  aggregate_id TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  schema_version INTEGER NOT NULL DEFAULT 1,
-  payload TEXT NOT NULL,
-  tenant_id TEXT,
-  idempotency_key TEXT NOT NULL UNIQUE,
-  correlation_id TEXT,
-  causation_id TEXT,
-  status TEXT NOT NULL DEFAULT 'pending',
-  attempt_count INTEGER NOT NULL DEFAULT 0,
-  last_error TEXT,
-  created_at TEXT NOT NULL,
-  processed_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status, created_at);
-CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox_events(aggregate_type, aggregate_id);
-`;
+/** Ensure the outbox table exists (idempotent DDL — split into separate statements). */
+const OUTBOX_DDL_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS outbox_events (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    aggregate_type TEXT NOT NULL,
+    aggregate_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    payload TEXT NOT NULL,
+    tenant_id TEXT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    correlation_id TEXT,
+    causation_id TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    processed_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox_events(aggregate_type, aggregate_id)`,
+];
 
 let initialized = false;
 
@@ -113,7 +113,10 @@ async function ensureSchema() {
     return;
   }
   try {
-    await client.execute(OUTBOX_DDL);
+    // Execute each DDL statement separately (Turso v2/pipeline rejects multi-statement strings)
+    for (const ddl of OUTBOX_DDL_STATEMENTS) {
+      await client.execute(ddl);
+    }
     initialized = true;
   } catch (e: any) {
     console.error("[turso-adapter] schema init failed:", e?.message?.slice(0, 100));
@@ -172,10 +175,10 @@ class TursoTransaction implements DbTransaction {
       const eventId = "evt_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       const row = toOutboxRow(e, eventId);
       const cols = Object.keys(row).join(",");
-      const placeholders = Object.keys(row).map((k) => ":" + k).join(",");
+      const placeholders = Object.keys(row).map(() => "?").join(","); // positional ? placeholders
       stmts.push({
         sql: `INSERT INTO outbox_events (${cols}) VALUES (${placeholders})`,
-        params: row,
+        args: Object.values(row),  // positional args array (TursoHttpClient wraps each)
       });
     }
 
@@ -287,7 +290,7 @@ export async function markOutboxProcessed(eventId: string): Promise<void> {
   if (!client) return;
   await client.execute(
     `UPDATE outbox_events SET status = 'processed', processed_at = ? WHERE event_id = ?`,
-    { processed_at: new Date().toISOString(), event_id: eventId },
+    [new Date().toISOString(), eventId],
   );
 }
 
@@ -299,10 +302,6 @@ export async function markOutboxFailed(eventId: string, error: string, deadLette
     `UPDATE outbox_events
      SET status = ?, last_error = ?, attempt_count = attempt_count + 1
      WHERE event_id = ?`,
-    {
-      status: deadLetter ? "dead_letter" : "failed",
-      last_error: error.slice(0, 500),
-      event_id: eventId,
-    },
+    [deadLetter ? "dead_letter" : "failed", error.slice(0, 500), eventId],
   );
 }

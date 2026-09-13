@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { drainOutbox, markOutboxProcessed, markOutboxFailed, applyEvents, inngestAdapter } from "@/lib/platform";
+import { drainOutbox, markOutboxProcessed, markOutboxFailed, applyEvents, workflow as inngestAdapter } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
