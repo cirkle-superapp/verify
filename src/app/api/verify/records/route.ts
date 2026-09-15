@@ -182,10 +182,39 @@ export async function POST(req: NextRequest) {
       console.error("[/api/verify/records] outbox append failed (verification still saved):", outboxErr?.message?.slice(0, 120));
     }
 
+    // ─── Trigger durable workflow (Inngest) ────────────────────────
+    // Enqueue the verification event for async processing:
+    //   - verification.completed → P2 transactional email (Brevo)
+    //   - verification.rejected  → P1 security alert email
+    //   - verification.saved     → no email (pending state)
+    //
+    // This is fire-and-forget: workflow failure NEVER rolls back the record.
+    // The Inngest SDK dedupes by idempotencyKey, so multiple triggers are safe.
+    let workflowEnqueued = false;
+    try {
+      const { workflow } = await import("@/lib/platform");
+      const eventName = status === "verified" ? "verification.completed" : status === "rejected" ? "verification.rejected" : null;
+      if (eventName) {
+        await workflow.enqueue({
+          name: eventName,
+          data: { ...outboxEvent.payload, verificationId: created.id },
+          idempotencyKey: `wf:${created.id}`,
+          correlationId: created.id,
+          causationId: outboxEvent.idempotencyKey,
+        });
+        workflowEnqueued = true;
+      }
+    } catch (wfErr: any) {
+      // Workflow enqueue failure does NOT fail the request.
+      // The outbox event still exists and will be drained by the scheduled relay.
+      console.error("[/api/verify/records] workflow enqueue failed (outbox will retry):", wfErr?.message?.slice(0, 120));
+    }
+
     return NextResponse.json({
       record: created,
       fraudCheck: fraudResult,
       outboxQueued: true,
+      workflowEnqueued,
       // Neon receives this via outbox → Inngest relay, NOT direct dual-write
       neonMirrored: "deferred-to-outbox",
     });
