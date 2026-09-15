@@ -1113,3 +1113,78 @@ Stage Summary:
 - Production deployment READY (commit dbcd25f)
 - Full loop verified: Vercel save → Turso outbox → Inngest workflow → Neon replication
 - Committed + pushed to GitHub (dbcd25f)
+
+---
+Task ID: 27
+Agent: main (Principal Knowledge Engineer)
+Task: Expand knowledge (21-country ID validators) + training (504 worldwide samples).
+
+KNOWLEDGE EXPANSION — src/lib/id-validators.ts (NEW):
+  21 country-specific national ID validators with checksum algorithms:
+    - Egypt (14-digit mod-11 weighted sum, century/gender/YYMMDD/serial)
+    - Saudi Arabia (10-digit Luhn, Hijri date extraction)
+    - UAE (15-digit ISO 7064 MOD 11-2, 784 prefix)
+    - Israel (9-digit Teudat Zehut, Luhn variant with weight 1,2,1,2)
+    - Turkey (11-digit TC Kimlik, double mod-10 + mod-11)
+    - France (15-digit INSEE, mod-97 checksum, gender + birth extraction)
+    - Spain (DNI 8 digits + letter mod-23, NIE X/Y/Z variant)
+    - Portugal (9-digit mod-11)
+    - Brazil (11-digit CPF, double mod-11 check digits)
+    - Germany (11-char ISO 7064 MOD 11-2, alphanumeric)
+    - Italy (16-char Codice Fiscale, mod-26 letter checksum, odd/even char maps)
+    - Netherlands (9-digit BSN, mod-11 with negative last weight)
+    - Belgium (11-digit National Register, mod-97)
+    - Sweden (10/12-digit Personnummer, Luhn)
+    - Norway (11-digit Fødselsnummer, double mod-11)
+    - USA (9-digit SSN format validation, area/group/serial rules)
+    - UK (NINO: 2 letters + 6 digits + 1 letter, regex validation)
+    - India (12-digit Aadhaar, Verhoeff algorithm with permutation tables)
+    - South Africa (13-digit, Luhn, gender + citizenship extraction)
+    - Mexico (18-char CURP, mod-10 with char→value mapping)
+    - Pakistan (13-digit CNIC, format validation)
+  
+  Each validator returns:
+    { country, idType, isValid, checksumValid, extractedFields, reasoning }
+  
+  Dispatcher: validateNationalId(country, id) → routes to correct validator
+  supportedCountries() → 21 country codes for UI
+
+TRAINING EXPANSION — scripts/generate-worldwide-samples.ts (NEW):
+  Generates 504 samples across 28 countries × 4 doc types:
+    - 18 samples per country (8 national_id, 4 passport, 4 driver_license, 2 residence)
+    - Real JPEG card images (SVG → sharp → JPEG, 1000×640, country-flagged)
+    - Names localized per country (Arabic, French, German, Spanish, Turkish, Indian, Brazilian, etc.)
+    - IDs generated using the actual checksum algorithms (passes validation)
+  
+  Country coverage: EG, SA, AE, KW, QA, JO, MA, TN, DZ, LB, TR, FR, DE, ES, IT, NL, BE,
+                    SE, NO, PT, IL, IN, BR, ZA, MX, PK, US, GB (28 countries, was 1)
+
+PRODUCTION VERIFIED (https://cirkle-verify.vercel.app):
+  - /api/verify/validate-id: 21 countries supported ✅
+  - Egyptian ID: isValid=true, checksum correctly identified ✅
+  - Turkish ID: isValid=true, checksum validated ✅
+  - /api/verify/samples: 200 samples returned (including worldwide GB-residence-504) ✅
+  - Training tab renders with new samples ✅
+
+TURSO STATE:
+  Total DocumentSample rows: 841 (was 337)
+  - 337 benchmark (Egyptian, existing)
+  - 504 synthetic-worldwide (new, 28 countries)
+  By docType: 561 national_id, 112 passport, 112 driver_license, 56 residence
+  By source: benchmark + synthetic-worldwide
+
+ARCHITECTURE INVARIANTS PRESERVED:
+  Turso = authoritative (841 samples) ✅
+  Neon = recovery (replicates via outbox) ✅
+  No dual-write ✅
+  R2/Resend NOT USED ✅
+  5 AI providers consensus ✅
+  Epoch 41 fencing ✅
+  Inngest durable workflows ✅
+
+Stage Summary:
+- 21-country ID validation knowledge base (algorithms: Luhn, ISO 7064, Verhoeff, mod-97/11/23/26)
+- 504 new training samples with real JPEG card images across 28 countries
+- Total training corpus: 841 samples (2.5× expansion)
+- /api/verify/validate-id endpoint live in production
+- Committed (4826e1b) + pushed to GitHub + deployed to Vercel
