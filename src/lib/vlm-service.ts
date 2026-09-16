@@ -400,6 +400,47 @@ export async function extractDocumentData(
 
   const stripLabel = (s?: string) => s ? s.replace(/^(الاسم|Name|الرقم القومي|National ID|تاريخ الميلاد|النوع|الديانة|الوظيفة|العنوان|الجنسية|الحالة|رقم المستند|تاريخ الانتهاء)\s*:?\s*/i, "").trim() || undefined : undefined;
 
+  // ─── OCR Post-Processing (Levenshtein + confusion correction) ────
+  // Runs AFTER AI consensus extraction. Corrects common OCR errors:
+  //   - Arabic names: "محماد" → "محمد" (Levenshtein distance 1)
+  //   - IDs: "O95O1O1O1234S6" → "29501010123456" (O→0, S→5, etc.)
+  //   - Country names: "مصرر" → "مصر" (Levenshtein distance 1)
+  let ocrCorrectionsApplied = 0;
+  try {
+    const { applyCorrections } = await import("@/lib/ocr-postprocess");
+    const corrected = applyCorrections({
+      fullNameAr: stripLabel(raw.fullNameAr) || undefined,
+      fullNameEn: stripLabel(raw.fullNameEn) || undefined,
+      nationalId: raw.nationalId || undefined,
+      documentNo: stripLabel(raw.documentNo) || undefined,
+      nationality: stripLabel(raw.nationality) || undefined,
+    });
+    if (corrected.fullNameAr && corrected.fullNameAr !== stripLabel(raw.fullNameAr)) {
+      raw.fullNameAr = corrected.fullNameAr;
+      ocrCorrectionsApplied++;
+    }
+    if (corrected.fullNameEn && corrected.fullNameEn !== stripLabel(raw.fullNameEn)) {
+      raw.fullNameEn = corrected.fullNameEn;
+      ocrCorrectionsApplied++;
+    }
+    if (corrected.nationalId && corrected.nationalId !== raw.nationalId) {
+      raw.nationalId = corrected.nationalId;
+      ocrCorrectionsApplied++;
+    }
+    if (corrected.documentNo && corrected.documentNo !== stripLabel(raw.documentNo)) {
+      raw.documentNo = corrected.documentNo;
+      ocrCorrectionsApplied++;
+    }
+    if (corrected.nationality && corrected.nationality !== stripLabel(raw.nationality)) {
+      raw.nationality = corrected.nationality;
+      ocrCorrectionsApplied++;
+    }
+  } catch {} // best-effort — don't fail extraction on post-process error
+
+  // Re-compute nationalId after OCR correction
+  const correctedNationalId = digitsOnly(raw.nationalId);
+  const correctedIdInfo = docType === "national_id" && correctedNationalId ? parseEgyptianNationalId(correctedNationalId) : null;
+
   const fullNameAr = normalizeArabic(stripLabel(raw.fullNameAr)) || undefined;
   const fullNameEn = normalizeLatin(stripLabel(raw.fullNameEn)) || undefined;
   const gender = normalizeGender(stripLabel(raw.gender)) || mrzInfo?.gender || idInfo?.gender;
