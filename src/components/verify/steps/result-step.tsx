@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database, Users } from "lucide-react";
+import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database, Users, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,11 +22,14 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
     livenessActions,
     livenessFrames,
     livenessResult,
+    livenessProBreakdown,
     faceMatch,
     recordId,
     setRecordId,
     isSubmitting,
     setSubmitting,
+    setCrossFieldResult,
+    crossFieldResult,
     reset,
   } = useVerificationStore();
   const meta = DOC_TYPES.find((d) => d.id === docType)!;
@@ -62,6 +65,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not save record");
       setRecordId(json.record.id);
+      if (json.crossField) setCrossFieldResult(json.crossField);
       toast.success("Verification record saved to database");
     } catch (e: any) {
       setSaveError(e?.message || "Failed to save record");
@@ -69,7 +73,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
     } finally {
       setSubmitting(false);
     }
-  }, [docType, meta.needsBack, docFront, docBack, docExtracted, selfie, livenessFrames, livenessActions, faceMatch, livenessResult, setRecordId, setSubmitting]);
+  }, [docType, meta.needsBack, docFront, docBack, docExtracted, selfie, livenessFrames, livenessActions, faceMatch, livenessResult, setRecordId, setSubmitting, setCrossFieldResult]);
 
   // Auto-save once on mount
   useEffect(() => {
@@ -174,6 +178,85 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
               labelAr="الحياة"
             />
           </div>
+        </div>
+      )}
+
+      {/* Cross-field validation + Liveness Pro summary */}
+      {(crossFieldResult || livenessProBreakdown) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {crossFieldResult && (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-teal-600" />
+                    Cross-Field Validation
+                  </div>
+                  <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
+                    crossFieldResult.hasCritical ? "bg-rose-100 text-rose-700" :
+                    crossFieldResult.hasErrors ? "bg-amber-100 text-amber-700" :
+                    "bg-teal-100 text-teal-700"
+                  }`}>
+                    {crossFieldResult.hasCritical ? "CRITICAL" : crossFieldResult.hasErrors ? "ISSUES" : "OK"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md bg-muted/50 px-2 py-1.5">
+                    <div className="text-[10px] uppercase text-muted-foreground">Consistency</div>
+                    <div className="font-semibold">{Math.round((crossFieldResult.consistencyScore ?? 0) * 100)}%</div>
+                  </div>
+                  <div className="rounded-md bg-muted/50 px-2 py-1.5">
+                    <div className="text-[10px] uppercase text-muted-foreground">Fraud prob.</div>
+                    <div className="font-semibold">{Math.round((crossFieldResult.fraudProbability ?? 0) * 100)}%</div>
+                  </div>
+                </div>
+                {crossFieldResult.flags && crossFieldResult.flags.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    {crossFieldResult.flags.slice(0, 5).map((flag: any, i: number) => (
+                      <div key={i} className={`text-xs px-2 py-1 rounded ${
+                        flag.severity === "critical" ? "bg-rose-50 text-rose-700" :
+                        flag.severity === "error" ? "bg-amber-50 text-amber-700" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        <span className="font-mono">{flag.code}</span>: {flag.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {livenessProBreakdown && (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-teal-600" />
+                    Liveness Pro Analysis
+                  </div>
+                  <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
+                    livenessProBreakdown.isLive ? "bg-teal-100 text-teal-700" : "bg-rose-100 text-rose-700"
+                  }`}>
+                    {livenessProBreakdown.isLive ? "LIVE" : "SUSPECT"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  <ProMiniStat label="Motion" value={`${livenessProBreakdown.motionScore ?? 0}/40`} />
+                  <ProMiniStat label="Challenge" value={`${livenessProBreakdown.challengeScore ?? 0}/30`} />
+                  <ProMiniStat label="Anti-spoof" value={`${((livenessProBreakdown.printAttackScore ?? 0) + (livenessProBreakdown.screenArtifactScore ?? 0) + (livenessProBreakdown.depthScore ?? 0))}/20`} />
+                  <ProMiniStat label="Direction" value={livenessProBreakdown.motionDirection || "none"} />
+                  <ProMiniStat label="Smooth" value={`${livenessProBreakdown.motionSmoothnessScore ?? 0}/5`} />
+                  <ProMiniStat label="Velocity" value={`${livenessProBreakdown.velocityProfileScore ?? 0}/5`} />
+                </div>
+                {livenessProBreakdown.issues && livenessProBreakdown.issues.length > 0 && (
+                  <div className="text-xs text-amber-700 px-2 py-1 rounded bg-amber-50">
+                    ⚠ {livenessProBreakdown.issues.slice(0, 2).join("; ")}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -283,5 +366,14 @@ function ImgCard({ label, src }: { label: string; src: string }) {
         <img src={src} alt={label} className="w-full rounded-md border max-h-48 object-contain bg-black/5" />
       </CardContent>
     </Card>
+  );
+}
+
+function ProMiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs font-semibold">{value}</div>
+    </div>
   );
 }

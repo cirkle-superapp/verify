@@ -33,7 +33,7 @@ interface LivenessProBreakdown {
 }
 
 export function LivenessStep() {
-  const { livenessActions, livenessFrames, addLivenessFrame, clearLivenessFrames, setLivenessResult, livenessResult, goNext, setStep, selfie } =
+  const { livenessActions, livenessFrames, addLivenessFrame, clearLivenessFrames, setLivenessResult, setLivenessProBreakdown, livenessResult, goNext, setStep, selfie } =
     useVerificationStore();
   const [proBreakdown, setProBreakdown] = useState<LivenessProBreakdown | null>(null);
 
@@ -107,6 +107,7 @@ export function LivenessStep() {
         if (!res.ok) throw new Error(json.error || "Liveness check failed");
         setLivenessResult(json.result);
         setProBreakdown(json.proBreakdown || null);
+        setLivenessProBreakdown(json.proBreakdown || null);
         if (json.result?.isLive) {
           toast.success(`Liveness verified (${Math.round(json.result.score)}%)`);
         } else {

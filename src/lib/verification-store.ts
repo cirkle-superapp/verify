@@ -38,8 +38,11 @@ interface VerificationState {
   livenessActions: LivenessAction[]; // randomly chosen sequence
   livenessFrames: string[];
   livenessResult: LivenessResult | null;
+  livenessProBreakdown: Record<string, any> | null; // Pro breakdown from /api/verify/liveness
   // face match
   faceMatch: FaceMatchResult | null;
+  // cross-field validation (from /api/verify/records response)
+  crossFieldResult: { flags: any[]; consistencyScore: number; fraudProbability: number; hasCritical: boolean; hasErrors: boolean } | null;
   // result
   recordId: string | null;
   isSubmitting: boolean;
@@ -56,7 +59,9 @@ interface VerificationState {
   addLivenessFrame: (f: string) => void;
   clearLivenessFrames: () => void;
   setLivenessResult: (r: LivenessResult | null) => void;
+  setLivenessProBreakdown: (b: Record<string, any> | null) => void;
   setFaceMatch: (f: FaceMatchResult | null) => void;
+  setCrossFieldResult: (r: any | null) => void;
   setRecordId: (id: string | null) => void;
   setSubmitting: (b: boolean) => void;
   reset: () => void;
@@ -112,7 +117,9 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
   livenessActions: [],
   livenessFrames: [],
   livenessResult: null,
+  livenessProBreakdown: null,
   faceMatch: null,
+  crossFieldResult: null,
   recordId: null,
   isSubmitting: false,
 
@@ -127,7 +134,9 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
   addLivenessFrame: (f) => set((st) => ({ livenessFrames: [...st.livenessFrames, f] })),
   clearLivenessFrames: () => set({ livenessFrames: [] }),
   setLivenessResult: (r) => set({ livenessResult: r }),
+  setLivenessProBreakdown: (b) => set({ livenessProBreakdown: b }),
   setFaceMatch: (f) => set({ faceMatch: f }),
+  setCrossFieldResult: (r) => set({ crossFieldResult: r }),
   setRecordId: (id) => set({ recordId: id }),
   setSubmitting: (b) => set({ isSubmitting: b }),
   reset: () => {
@@ -143,7 +152,9 @@ export const useVerificationStore = create<VerificationState>((set, get) => ({
       livenessActions: [],
       livenessFrames: [],
       livenessResult: null,
+      livenessProBreakdown: null,
       faceMatch: null,
+      crossFieldResult: null,
       recordId: null,
       isSubmitting: false,
     });
