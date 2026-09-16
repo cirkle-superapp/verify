@@ -107,6 +107,39 @@ export async function POST(req: NextRequest) {
       // fraud check is best-effort — don't block the save
     }
 
+    // ─── Cross-Field Validation ──────────────────────────────────────
+    // Catches inconsistencies between extracted fields that fraud detection
+    // and AI consensus might miss (e.g., nationalId encodes Male but
+    // extracted gender = Female, nationalId checksum invalid, MRZ mismatch).
+    let crossFieldResult = null;
+    try {
+      const { crossFieldValidate } = await import("@/lib/cross-field-validation");
+      crossFieldResult = crossFieldValidate({
+        fullNameAr: extracted?.fullNameAr,
+        fullNameEn: extracted?.fullNameEn,
+        nationalId: extracted?.nationalId,
+        country: docType === "national_id" ? "EG" : undefined, // future: detect from spec catalog
+        birthDate: extracted?.birthDate,
+        gender: extracted?.gender,
+        expiryDate: extracted?.expiryDate,
+        nationality: extracted?.nationality,
+        documentNo: extracted?.documentNo,
+        docType,
+      });
+      if (crossFieldResult.hasCritical) {
+        status = "rejected";
+        notes.push(`CROSS-FIELD CRITICAL: ${crossFieldResult.flags.filter(f => f.severity === "critical").map(f => f.code).join(", ")}`);
+      } else if (crossFieldResult.hasErrors) {
+        notes.push(`CROSS-FIELD ERRORS: ${crossFieldResult.flags.filter(f => f.severity === "error").map(f => f.code).join(", ")}`);
+      }
+      // Adjust confidence based on consistency score
+      if (crossFieldResult.consistencyScore < 0.5) {
+        notes.push(`LOW CONSISTENCY: ${(crossFieldResult.consistencyScore * 100).toFixed(0)}% — fields disagree`);
+      }
+    } catch (e) {
+      // cross-field is best-effort
+    }
+
     const created = await db.verification.create({
       data: {
         docType,
@@ -213,6 +246,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       record: created,
       fraudCheck: fraudResult,
+      crossField: crossFieldResult,
       outboxQueued: true,
       workflowEnqueued,
       // Neon receives this via outbox → Inngest relay, NOT direct dual-write
