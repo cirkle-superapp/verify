@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowLeft, Loader2, Play, CheckCircle2, XCircle, RotateCcw, Hand, Activity } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2, Play, CheckCircle2, XCircle, RotateCcw, Hand, Activity, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,9 +15,27 @@ import { toast } from "sonner";
 const FRAMES_PER_ACTION = 5;
 const SECONDS_PER_ACTION = 4;
 
+// Extended liveness result with Pro breakdown
+interface LivenessProBreakdown {
+  motionPresent?: boolean;
+  motionScore?: number;
+  motionDirection?: string;
+  challengeMet?: boolean;
+  challengeScore?: number;
+  printAttackScore?: number;
+  screenArtifactScore?: number;
+  depthScore?: number;
+  motionSmoothnessScore?: number;
+  velocityProfileScore?: number;
+  totalScore?: number;
+  issues?: string[];
+  suggestions?: string[];
+}
+
 export function LivenessStep() {
   const { livenessActions, livenessFrames, addLivenessFrame, clearLivenessFrames, setLivenessResult, livenessResult, goNext, setStep, selfie } =
     useVerificationStore();
+  const [proBreakdown, setProBreakdown] = useState<LivenessProBreakdown | null>(null);
 
   const [phase, setPhase] = useState<"preview" | "performing" | "done" | "analyzing">("preview");
   const [actionIdx, setActionIdx] = useState(0);
@@ -88,6 +106,7 @@ export function LivenessStep() {
         if (cancelled) return;
         if (!res.ok) throw new Error(json.error || "Liveness check failed");
         setLivenessResult(json.result);
+        setProBreakdown(json.proBreakdown || null);
         if (json.result?.isLive) {
           toast.success(`Liveness verified (${Math.round(json.result.score)}%)`);
         } else {
@@ -110,6 +129,7 @@ export function LivenessStep() {
   const startChallenge = () => {
     clearLivenessFrames();
     setLivenessResult(null);
+    setProBreakdown(null);
     setError(null);
     analyzedRef.current = false;
     setActionIdx(0);
@@ -119,6 +139,7 @@ export function LivenessStep() {
   const restartChallenge = () => {
     clearLivenessFrames();
     setLivenessResult(null);
+    setProBreakdown(null);
     setError(null);
     analyzedRef.current = false;
     setActionIdx(0);
@@ -257,6 +278,37 @@ export function LivenessStep() {
                     <ScoreBadge score={livenessResult.score} label="Liveness" threshold={70} />
                   </div>
                 </div>
+
+                {/* Liveness Pro breakdown */}
+                {proBreakdown && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-border">
+                    <ProStat label="Motion" value={`${proBreakdown.motionScore ?? 0}/40`} ok={(proBreakdown.motionScore ?? 0) >= 20} />
+                    <ProStat label="Challenge" value={`${proBreakdown.challengeScore ?? 0}/30`} ok={proBreakdown.challengeMet} />
+                    <ProStat label="Anti-spoof" value={`${(proBreakdown.printAttackScore ?? 0) + (proBreakdown.screenArtifactScore ?? 0) + (proBreakdown.depthScore ?? 0)}/20`} ok={proBreakdown.printAttackScore > 5} />
+                    <ProStat label="Smoothness" value={`${proBreakdown.motionSmoothnessScore ?? 0}/5`} ok={(proBreakdown.motionSmoothnessScore ?? 0) >= 3} />
+                    <ProStat label="Velocity" value={`${proBreakdown.velocityProfileScore ?? 0}/5`} ok={(proBreakdown.velocityProfileScore ?? 0) >= 3} />
+                    <ProStat label="Direction" value={proBreakdown.motionDirection || "none"} ok={proBreakdown.motionDirection !== "none"} />
+                  </div>
+                )}
+
+                {proBreakdown?.issues && proBreakdown.issues.length > 0 && (
+                  <div className="flex items-start gap-2 p-2 rounded-md bg-amber-50 border border-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-amber-700">
+                      <span className="font-semibold">Issues: </span>{proBreakdown.issues.join("; ")}
+                    </div>
+                  </div>
+                )}
+
+                {proBreakdown?.suggestions && proBreakdown.suggestions.length > 0 && (
+                  <div className="flex items-start gap-2 p-2 rounded-md bg-teal-50 border border-teal-200">
+                    <ShieldCheck className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-teal-700">
+                      <span className="font-semibold">Tips: </span>{proBreakdown.suggestions.join("; ")}
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-sm text-muted-foreground leading-relaxed">{livenessResult.reasoning}</p>
                 {livenessResult.detectedActions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
@@ -292,6 +344,15 @@ export function LivenessStep() {
           See verification result <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function ProStat({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
+  return (
+    <div className={`rounded-md px-2 py-1.5 text-center ${ok ? "bg-teal-50 border border-teal-200" : "bg-muted border border-border"}`}>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-sm font-semibold ${ok ? "text-teal-700" : "text-muted-foreground"}`}>{value}</div>
     </div>
   );
 }
