@@ -1188,3 +1188,95 @@ Stage Summary:
 - Total training corpus: 841 samples (2.5× expansion)
 - /api/verify/validate-id endpoint live in production
 - Committed (4826e1b) + pushed to GitHub + deployed to Vercel
+
+---
+Task ID: 28
+Agent: main (Principal Knowledge Engineer)
+Task: Expand knowledge — MRZ parser (ICAO 9303) + 33 more country ID validators.
+
+KNOWLEDGE EXPANSION:
+
+MRZ PARSER (src/lib/mrz-parser.ts) — ICAO 9303 Machine Readable Zone:
+  - parseMrz(text): auto-detects format from line lengths
+  - TD1 (3×30): ID cards, residence permits — 3 lines of 30 chars
+  - TD2 (2×36): passport cards — 2 lines of 36 chars
+  - TD3 (2×44): passport booklets — 2 lines of 44 chars
+  - Check digit computation (mod-10, weights 7,3,1 repeating)
+  - Char values: 0-9 → 0-9, A-Z → 10-35, < → 0
+  - Extracts: documentCode, issuingCountry, documentNumber, name (primary/secondary/full),
+    sex, birthDate, expiryDate, nationality, optionalData1, optionalData2
+  - Validates 4 check digits (doc number, birth, expiry, composite)
+  - 130+ ISO 3166-1 alpha-3 country codes mapped to names (EGY→Egypt, USA→United States, etc.)
+  - countryFromAlpha3() helper
+  - /api/verify/parse-mrz: POST endpoint for MRZ parsing + GET for examples
+
+ID VALIDATORS (src/lib/id-validators.ts) — 54 countries (was 21, +33 new):
+  European expansion (20 new):
+    PL (PESEL mod-10 with century/month-offset encoding)
+    CZ (rodné číslo mod-11, women month+50)
+    GR (Dout 2L+6D)
+    RO (CNP mod-10 weighted, century+gender from first digit)
+    IE (PPS mod-23 letter check)
+    DK (CPR 10-digit, century from sequence)
+    FI (Henkilötunnus mod-31, century char mapping)
+    HR (OIB ISO 7064 MOD 11-10)
+    RS (JMBG mod-11 weighted)
+    BG (EGN mod-11, century from month offset)
+    HU (Személyi mod-11 alphanumeric)
+    SK (Birth Number mod-11, women month+50)
+    EE (isikukood mod-11 with fallback weights)
+    LV (Personas kods 11/12 digit)
+    LT (Asmens kodas mod-11 with fallback)
+    SI (EMŠO 13-digit mod-11)
+    IS (Kennitala mod-11, DDMMYY)
+    RU (INN 10/12-digit double mod-11)
+    CH (AHV 11/13-digit Luhn)
+    AT (Personalausweis 8-9 digit)
+  Americas expansion (3 new):
+    AR (DNI 7-8 digit)
+    CL (RUN 7-9 digit + K, mod-11 with K exception)
+    CO (Cédula 8-11 digit)
+  Asia-Pacific expansion (10 new):
+    AU (TFN 9/11-digit mod-11)
+    CA (SIN 9-digit Luhn)
+    JP (My Number 12-digit mod-11)
+    KR (RRN 13-digit mod-11, gender from 7th digit)
+    TH (13-digit mod-11 weighted)
+    ID (NIK 16-digit)
+    PH (PhilSys 12-13 digit)
+    SG (NRIC/FIN 9-char mod-11 letter, S/T/F/G prefix)
+    MY (NRIC 12-digit YYMMDD-PB-XXX)
+    HK (HKID 1-2 letters + 6 digits + check, mod-11)
+
+  Total: 54 countries (up from 21, 2.6× expansion)
+  Algorithms: Luhn, ISO 7064 MOD 11-2/11-10, Verhoeff, mod-10/11/23/26/31/97,
+              country-specific weighted sums, letter-from-mod, century decoding
+
+PRODUCTION VERIFIED (https://cirkle-verify.vercel.app):
+  - /api/verify/validate-id: 54 countries ✅
+  - Polish PESEL: format valid, checksum validated ✅
+  - Chilean RUN: format valid, K check validated ✅
+  - /api/verify/parse-mrz: TD3 parsed (Egypt, name extracted) ✅
+  - Platform status: Epoch 41, Turso + Neon healthy ✅
+
+TURSO STATE (unchanged, 841 samples):
+  - 337 benchmark (Egyptian) + 504 worldwide (28 countries)
+  - outbox_events + event_log (Neon) tables active
+
+ARCHITECTURE INVARIANTS PRESERVED:
+  All existing platform architecture intact:
+  - Turso authoritative, Neon recovery (in_sync)
+  - No dual-write (outbox pattern)
+  - Inngest durable workflows (5 functions)
+  - Brevo email (300/day, P0-P4 governor)
+  - SMS customer-funded (fail-closed)
+  - R2/Resend NOT USED
+  - 5 AI providers consensus (Gemini, Groq, OpenRouter, NVIDIA, HuggingFace)
+  - Epoch 41 fencing active
+
+Stage Summary:
+- MRZ parser (ICAO 9303 TD1/TD2/TD3) with check digit validation
+- 54-country ID validator knowledge base (was 21)
+- 2 new API endpoints: /api/verify/parse-mrz + /api/verify/validate-id (expanded)
+- Production live with all new knowledge
+- Committed (c2f278e) + pushed to GitHub + deployed to Vercel
