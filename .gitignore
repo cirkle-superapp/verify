@@ -62,3 +62,6 @@ worklog.md
 
 # Test images
 /tmp/
+# Agent worklog — contains credentials, NEVER commit
+worklog.md
+tool-results/
