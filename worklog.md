@@ -1280,3 +1280,76 @@ Stage Summary:
 - 2 new API endpoints: /api/verify/parse-mrz + /api/verify/validate-id (expanded)
 - Production live with all new knowledge
 - Committed (c2f278e) + pushed to GitHub + deployed to Vercel
+
+---
+Task ID: 29
+Agent: main (Principal Knowledge Engineer)
+Task: Cross-field validation engine + document security features database.
+
+CROSS-FIELD VALIDATION (src/lib/cross-field-validation.ts):
+  Catches inconsistencies between extracted fields that AI consensus misses:
+
+  Checks performed (12 total):
+  1. ID_FORMAT_INVALID (error) — national ID format invalid for country
+  2. ID_CHECKSUM_MISMATCH (critical) — checksum failed, possible fabrication
+  3. GENDER_MISMATCH_ID (critical) — ID encodes Male but extracted Female
+  4. BIRTHDATE_YEAR_MISMATCH (error) — ID birth year ≠ extracted
+  5. BIRTHDATE_MISMATCH (warning) — ID birth date ≠ extracted
+  6. ARABIC_NAME_HAS_LATIN (warning) — Arabic name has Latin chars
+  7. ENGLISH_NAME_HAS_ARABIC (warning) — English name has Arabic chars
+  8. BIRTHDATE_FUTURE (error) — birth date in future
+  9. BIRTHDATE_TOO_OLD (warning) — age > 120
+  10. DOCUMENT_EXPIRED (error) — expiry before today
+  11. DOCUMENT_EXPIRING_SOON (info) — < 30 days to expiry
+  12. NATIONALITY_COUNTRY_MISMATCH (warning) — country ≠ nationality
+  + 5 MRZ checks: MRZ_NAME_MISMATCH, MRZ_BIRTHDATE_MISMATCH,
+    MRZ_GENDER_MISMATCH, MRZ_DOCNUM_MISMATCH, MRZ_EXPIRY_MISMATCH
+
+  Returns: flags[], consistencyScore (0..1), hasCritical, hasErrors,
+    fraudProbability (0..1, weighted: critical=0.3, error=0.15, warning=0.05)
+
+  Wired into /api/verify/records: runs after fraud detection,
+  adjusts status to 'rejected' on critical flags.
+
+DOCUMENT SECURITY FEATURES (src/lib/document-security-features.ts):
+  Physical security feature catalog for 14 countries × doc types:
+  - Egypt: national_id + passport
+  - Saudi, UAE, Türkiye: national_id
+  - US, UK, Germany, France: passport + national_id (where applicable)
+  - Brazil, India: national_id
+  - Japan, Australia, Canada, South Korea: passport
+
+  Each spec: material, dimensions, issuedSince, features[] with
+  {feature, position, description}, mrzFormat, hasChip, notes.
+
+  Features cataloged: UV watermark, hologram, microprint, ghost photo,
+  laser engraving, chip, kinegram, thermochromic ink, guilloche,
+  intaglio printing, cross-page design, watermark, QR code.
+
+API ENDPOINTS:
+  - POST /api/verify/cross-check: run cross-field validation +
+    returns security spec for country+docType
+  - GET /api/verify/cross-check: supported countries + example
+
+PRODUCTION VERIFIED (https://cirkle-verify.vercel.app):
+  - Consistent fields: ID_CHECKSUM_MISMATCH flagged (test ID has bad check)
+    Consistency 0.6, fraud prob 0.3
+  - Gender mismatch (Male ID, Female extracted): GENDER_MISMATCH_ID critical
+    caught — consistency 0.2, fraud prob 0.6 ✅
+  - Expired document: DOCUMENT_EXPIRED error flagged ✅
+  - Security spec: Egyptian national_id returns 5 features ✅
+  - 14 countries with security specs ✅
+  - Platform status: Epoch 41, Turso + Neon healthy ✅
+
+ARCHITECTURE INVARIANTS PRESERVED:
+  All existing architecture intact (Turso/Neon/Inngest/Brevo/Vercel Blob/SMS)
+  R2/Resend NOT USED, 5 AI providers consensus, epoch 41 fencing active
+
+Stage Summary:
+- Cross-field validation engine: 17 checks (12 field + 5 MRZ consistency)
+- Document security features database: 14 countries, 16 specs
+- 2 new files: cross-field-validation.ts, document-security-features.ts
+- 1 new API: /api/verify/cross-check (POST + GET)
+- Wired into verification records route (adjusts status on critical)
+- Production live + verified
+- Committed (340f63f) + pushed to GitHub + deployed to Vercel
