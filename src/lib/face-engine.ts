@@ -21,19 +21,33 @@ let faceapi: any = null;
 
 /**
  * Load face-api.js and its models dynamically (runtime only).
+ *
+ * Polyfills TextEncoder/TextDecoder before importing face-api.js to
+ * prevent "TextEncoder is not a constructor" error in Node.js serverless.
  */
 async function ensureFaceApi() {
   if (!faceapi) {
+    // Polyfill TextEncoder/TextDecoder for Node.js (face-api.js expects browser APIs)
+    if (typeof globalThis.TextEncoder === "undefined" || typeof globalThis.TextDecoder === "undefined") {
+      const { TextEncoder, TextDecoder } = await import("util");
+      globalThis.TextEncoder = TextEncoder as any;
+      globalThis.TextDecoder = TextDecoder as any;
+    }
     faceapi = await import("@vladmandic/face-api");
   }
   if (!modelsLoaded) {
-    const modelUrl = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-    await Promise.all([
-      faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl),
-      faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
-      faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
-    ]);
-    modelsLoaded = true;
+    try {
+      const modelUrl = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl),
+        faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
+        faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
+      ]);
+      modelsLoaded = true;
+    } catch (e: any) {
+      console.error("[face-engine] Failed to load face-api models:", e?.message?.slice(0, 120));
+      return null;
+    }
   }
   return faceapi;
 }
@@ -121,6 +135,17 @@ export async function matchFaceSelfHosted(
   documentDataUrl: string
 ): Promise<FaceMatchResult> {
   try {
+    // Ensure face-api is loaded (with TextEncoder polyfill)
+    const api = await ensureFaceApi();
+    if (!api) {
+      return {
+        isMatch: false,
+        samePerson: false,
+        similarity: 0,
+        reasoning: "Face recognition engine unavailable (models failed to load). Using AI consensus fallback.",
+      };
+    }
+
     // Detect faces in both images
     const [selfieFace, docFace] = await Promise.all([
       getFaceDescriptor(selfieDataUrl),

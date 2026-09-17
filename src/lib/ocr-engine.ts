@@ -20,17 +20,30 @@ let englishWorker: any = null;
 /**
  * Initialize Tesseract workers for Arabic and English.
  * Workers are cached across requests for performance.
+ *
+ * NOTE: Tesseract.js has a known worker-path resolution bug in some
+ * environments (Bun, Docker, sandbox) where it resolves to /ROOT/...
+ * instead of the correct node_modules path. We catch this gracefully
+ * and return null — the caller falls back to AI consensus extraction.
  */
 async function getArabicWorker() {
   if (!arabicWorker) {
-    arabicWorker = await createWorker("ara+eng", 1, {
-      logger: () => {}, // silence logs
-    });
-    // Set page segmentation mode to automatic
-    await arabicWorker.setParameters({
-      tessedit_pageseg_mode: PSM.AUTO,
-      preserve_interword_spaces: "1",
-    });
+    try {
+      arabicWorker = await createWorker("ara+eng", 1, {
+        logger: () => {}, // silence logs
+        errorHandler: (err: any) => {
+          console.error("[ocr-engine] Tesseract worker error:", err?.message?.slice(0, 100));
+        },
+      });
+      await arabicWorker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+        preserve_interword_spaces: "1",
+      });
+    } catch (e: any) {
+      console.error("[ocr-engine] Failed to create Tesseract worker:", e?.message?.slice(0, 120));
+      arabicWorker = null;
+      return null;
+    }
   }
   return arabicWorker;
 }
@@ -89,6 +102,9 @@ export async function runOCR(dataUrl: string): Promise<OCRResult> {
   const preprocessed = await preprocessForOCR(dataUrl);
 
   const worker = await getArabicWorker();
+  if (!worker) {
+    return { text: "", confidence: 0, words: [] };
+  }
 
   const result = await worker.recognize(preprocessed);
 
