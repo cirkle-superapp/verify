@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireApiKey } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 
 // GET /api/v1/verify/analytics — real-time verification analytics dashboard
+// AUTH: Requires API key
 export async function GET(req: NextRequest) {
+  const auth = await requireApiKey(req);
+  if (auth instanceof Response) return auth;
   try {
     const url = new URL(req.url);
     const days = parseInt(url.searchParams.get("days") || "30");

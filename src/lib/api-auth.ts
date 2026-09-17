@@ -242,5 +242,91 @@ export async function requireApiKey(req: Request): Promise<ApiKey | Response> {
     );
   }
 
+  // Per-API-key rate limiting (sliding window)
+  const rateLimitResult = checkKeyRateLimit(keyInfo);
+  if (rateLimitResult.limited) {
+    return new Response(
+      JSON.stringify({
+        error: `Rate limit exceeded: ${keyInfo.rateLimitPerMin} requests/minute for key "${keyInfo.name}"`,
+        code: "rate_limited",
+        retryAfter: rateLimitResult.retryAfter,
+        limit: keyInfo.rateLimitPerMin,
+        window: "60s",
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rateLimitResult.retryAfter),
+          "X-RateLimit-Limit": String(keyInfo.rateLimitPerMin),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(Math.ceil(rateLimitResult.resetAt / 1000)),
+        },
+      }
+    );
+  }
+
+  // Increment request counter (async, non-blocking)
+  incrementKeyRequestCount(keyInfo).catch(() => {});
+
   return keyInfo;
+}
+
+// ─── Per-API-key rate limiting (sliding window) ──────────────────
+
+interface RateLimitEntry {
+  timestamps: number[]; // request timestamps in the last 60s
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+const RATE_WINDOW_MS = 60_000; // 1 minute
+
+/** Check if the API key has exceeded its rate limit. Returns { limited, retryAfter, resetAt }. */
+function checkKeyRateLimit(keyInfo: ApiKey): { limited: boolean; retryAfter: number; resetAt: number } {
+  const keyHash = keyInfo.keyHash;
+  const now = Date.now();
+  const limit = keyInfo.rateLimitPerMin || 60;
+
+  let entry = rateLimitStore.get(keyHash);
+  if (!entry) {
+    entry = { timestamps: [] };
+    rateLimitStore.set(keyHash, entry);
+  }
+
+  // Remove timestamps older than 60s
+  entry.timestamps = entry.timestamps.filter((ts) => now - ts < RATE_WINDOW_MS);
+
+  if (entry.timestamps.length >= limit) {
+    const oldest = entry.timestamps[0];
+    const resetAt = oldest + RATE_WINDOW_MS;
+    const retryAfter = Math.ceil((resetAt - now) / 1000);
+    return { limited: true, retryAfter: Math.max(1, retryAfter), resetAt };
+  }
+
+  // Add current request
+  entry.timestamps.push(now);
+  return { limited: false, retryAfter: 0, resetAt: now + RATE_WINDOW_MS };
+}
+
+/** Increment the request counter in the database (async, non-blocking). */
+async function incrementKeyRequestCount(keyInfo: ApiKey): Promise<void> {
+  const client = await getTursoClient();
+  if (!client) return;
+  try {
+    await client.execute(
+      `UPDATE api_keys SET total_requests = total_requests + 1 WHERE key_hash = ?`,
+      [keyInfo.keyHash]
+    );
+  } catch {}
+}
+
+/** Get rate limit info for a key (for headers/debugging). */
+export function getRateLimitInfo(keyInfo: ApiKey): { remaining: number; limit: number; resetAt: number } {
+  const entry = rateLimitStore.get(keyInfo.keyHash);
+  const now = Date.now();
+  const limit = keyInfo.rateLimitPerMin || 60;
+  const recent = (entry?.timestamps || []).filter((ts) => now - ts < RATE_WINDOW_MS);
+  const remaining = Math.max(0, limit - recent.length);
+  const resetAt = recent.length > 0 ? recent[0] + RATE_WINDOW_MS : now + RATE_WINDOW_MS;
+  return { remaining, limit, resetAt };
 }

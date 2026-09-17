@@ -119,6 +119,14 @@ export async function GET() {
       ],
       integration: [
         {
+          method: "GET|POST|DELETE",
+          path: "/api/v1/api-keys",
+          description: "API key management. POST creates key (bootstrap: first key no auth, subsequent need admin or X-Admin-Secret). GET lists keys (admin). DELETE revokes by keyId.",
+          auth: "X-Admin-Secret header for bootstrap recovery, or valid API key for admin operations",
+          body: { name: "string", email: "string", rateLimitPerMin: "number (default 60)" },
+          response: { rawKey: "cvk_xxx (shown ONCE)", keyId: "key_xxx" },
+        },
+        {
           method: "GET|POST",
           path: "/api/v1/verify/webhook",
           description: "Register webhook URL for external integrations. Events: verification.completed/rejected/saved/fraud.detected. HMAC-SHA256 signed, 3 retries with exponential backoff.",
@@ -164,6 +172,27 @@ export async function GET() {
           params: "?format=csv|json",
         },
       ],
+    },
+    authentication: {
+      type: "API Key",
+      header: "Authorization: Bearer cvk_xxx OR X-API-Key: cvk_xxx",
+      keyFormat: "cvk_<48 hex chars>",
+      protectedRoutes: [
+        "POST /api/v1/verify/batch",
+        "POST /api/v1/verify/fraud-check",
+        "GET|POST /api/v1/verify/session",
+        "GET /api/v1/verify/analytics",
+        "GET /api/v1/api-keys (admin)",
+        "POST /api/v1/api-keys (first key = bootstrap, subsequent = admin)",
+      ],
+      rateLimiting: {
+        type: "Per-key sliding window (60s)",
+        default: "60 requests/minute",
+        headers: "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After (on 429)",
+        exceededResponse: "429 { error, code: 'rate_limited', retryAfter, limit }",
+      },
+      adminRecovery: "X-Admin-Secret header (PLATFORM_ADMIN_SECRET env var) for bootstrap recovery",
+      security: "Raw keys never stored in DB — only SHA-256 hashes",
     },
     knowledgeBase: {
       idValidators: "54 countries with checksum algorithms (Luhn, ISO 7064, Verhoeff, mod-11/23/26/31/97)",
