@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { requireApiKey } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -10,6 +11,8 @@ export const maxDuration = 300;
  * Batch verification endpoint — accepts multiple document images and
  * processes them in parallel. Returns a job ID that can be polled for results.
  *
+ * AUTH: Requires API key (Authorization: Bearer cvk_xxx or X-API-Key: cvk_xxx)
+ *
  * Body: { documents: [{ frontImage, backImage, docType, selfieImage? }] }
  * Response: { jobId, status: "processing", total }
  *
@@ -17,6 +20,10 @@ export const maxDuration = 300;
  * Cirkle processes unlimited batch checks at zero cost.
  */
 export async function POST(req: NextRequest) {
+  // API key authentication (required for external callers)
+  const auth = await requireApiKey(req);
+  if (auth instanceof Response) return auth;
+
   const limited = checkRateLimit(req, { maxRequests: 5, windowMs: 60_000, prefix: "batch" });
   if (limited) return limited;
 

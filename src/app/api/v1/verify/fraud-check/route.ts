@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFraudChecks, imageHash } from "@/lib/fraud-detection";
 import { getClientIp } from "@/lib/rate-limit";
+import { requireApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 // POST /api/v1/verify/fraud-check — run fraud detection on extracted data
+// AUTH: Requires API key
 export async function POST(req: NextRequest) {
+  const auth = await requireApiKey(req);
+  if (auth instanceof Response) return auth;
   try {
     const body = await req.json();
     const ip = getClientIp(req);
