@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "export DATABASE_URL=libsql://validate-fortleem.aws-us-east-2.turso.io && export DATABASE_AUTH_TOKEN=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODkxNjA5NjgsImlkIjoiMDFhMDkyNGQtODkwMS03N2ZjLWE0NjItY2ZlYWE3Y2RmOWIxIiwia2lkIjoiMlNGbjFBZlVSdTVMUXlrTGRzR3djNXdWV1V2VGVxV2FWODZRdlhST0MxYyIsInJpZCI6IjRlZmE5ODI3LThmM2YtNDUyMS04NzI3LTI2NGI3ZDA1ZGZmZCJ9.VgEu3vlPUdEb_6v5Jyxg8iRijiN238Abm5DnduwQGEINjBPc0L1L-SYG9oc5ZjqYEDnlIAJGwNm8ZCTys6rCAw && next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",

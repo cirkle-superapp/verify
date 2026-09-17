@@ -1,58 +1,92 @@
 import { NextResponse } from "next/server";
+import { tursoAdapter } from "@/lib/platform/turso-adapter";
+import { neonRecoveryAdapter, getReplicationState } from "@/lib/platform/neon-recovery-adapter";
+import { isConsensusModeActive, getConfiguredProviders } from "@/lib/vlm-service";
+import { allBreakerSnapshots } from "@/lib/platform/circuit-breaker";
+import { getEpoch } from "@/lib/platform/epoch";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-// GET /api/health — health check for uptime monitoring
+/**
+ * GET /api/health — comprehensive health check
+ *
+ * Checks ALL platform components:
+ *   - Turso (authoritative database)
+ *   - Neon (recovery database + replication state)
+ *   - AI consensus (5 providers)
+ *   - Circuit breakers (all should be CLOSED)
+ *   - Database epoch (fencing)
+ *
+ * Returns 200 if Turso is healthy, 503 if degraded.
+ */
 export async function GET() {
-  const started = Date.now();
-  try {
-    // Test DB connection
-    let dbOk = false;
-    let dbLatency = 0;
-    try {
-      const { db } = await import("@/lib/db");
-      const t0 = Date.now();
-      await db.verification.findMany({ take: 1 });
-      dbLatency = Date.now() - t0;
-      dbOk = true;
-    } catch (e: any) {
-      dbOk = false;
-    }
+  const start = Date.now();
 
-    // Check VLM SDK availability
-    let vlmOk = false;
-    try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      vlmOk = !!ZAI;
-    } catch {
-      vlmOk = false;
-    }
+  // Check Turso (authoritative)
+  const tursoHealth = await tursoAdapter.health();
 
-    const status = dbOk ? "healthy" : "degraded";
-    const httpStatus = dbOk ? 200 : 503;
+  // Check Neon (recovery)
+  const neonHealth = await neonRecoveryAdapter.health();
+  const replication = getReplicationState();
 
-    return NextResponse.json(
-      {
-        status,
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime ? `${Math.floor(process.uptime())}s` : "unknown",
-        checks: {
-          database: {
-            ok: dbOk,
-            latency: dbLatency > 0 ? `${dbLatency}ms` : "n/a",
-            type: process.env.DATABASE_URL?.startsWith("libsql:") ? "turso" : "sqlite",
+  // Check AI consensus
+  const consensusActive = isConsensusModeActive();
+  const providers = getConfiguredProviders();
+
+  // Check circuit breakers
+  const breakers = allBreakerSnapshots();
+  const allClosed = breakers.every((b) => b.state === "CLOSED");
+
+  // Check epoch
+  const epoch = getEpoch();
+
+  const latency = Date.now() - start;
+  const dbOk = tursoHealth.ok;
+  const status = dbOk ? "healthy" : "degraded";
+  const httpStatus = dbOk ? 200 : 503;
+
+  return NextResponse.json(
+    {
+      status,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime ? `${Math.floor(process.uptime())}s` : "unknown",
+      latency: `${latency}ms`,
+      epoch: { epoch: epoch.epoch, primary: epoch.primary },
+      checks: {
+        database: {
+          turso: {
+            ok: tursoHealth.ok,
+            latency: `${tursoHealth.latencyMs}ms`,
+            role: "primary (authoritative)",
+            detail: tursoHealth.detail,
           },
-          vlm: { ok: vlmOk, provider: "z-ai-web-dev-sdk" },
-          rateLimit: { ok: true, type: "in-memory" },
+          neon: {
+            ok: neonHealth.ok,
+            latency: `${neonHealth.latencyMs}ms`,
+            role: "recovery (projection)",
+            replicationState: replication.recoveryState,
+            replicationLagSeconds: replication.replicationLagSeconds,
+            detail: neonHealth.detail,
+          },
         },
-        version: "1.0.0",
+        aiConsensus: {
+          ok: consensusActive,
+          active: consensusActive,
+          providerCount: providers.length,
+          providers: providers,
+        },
+        circuitBreakers: {
+          ok: allClosed,
+          count: breakers.length,
+          allClosed,
+          breakers: breakers.map((b) => ({ name: b.name, state: b.state })),
+        },
+        rateLimit: { ok: true, type: "in-memory" },
       },
-      { status: httpStatus }
-    );
-  } catch (e: any) {
-    return NextResponse.json(
-      { status: "unhealthy", error: e?.message, timestamp: new Date().toISOString() },
-      { status: 500 }
-    );
-  }
+      version: "2.2.0",
+      invariant: "ZERO-COST-BY-DEFAULT · FAIL-CLOSED · NO R2 · NO RESEND",
+    },
+    { status: httpStatus }
+  );
 }
