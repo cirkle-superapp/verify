@@ -5,7 +5,8 @@
     "dev": "bun --hot index.ts"
   },
   "dependencies": {
-    "tesseract.js": "^7.0.0",
-    "sharp": "^0.34.3"
+    "regenerator-runtime": "^0.14.1",
+    "sharp": "^0.34.3",
+    "tesseract.js": "^5.0.0"
   }
 }

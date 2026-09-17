@@ -18,6 +18,8 @@
 
 import { createWorker, PSM } from "tesseract.js";
 import sharp from "sharp";
+import { resolve } from "path";
+import { existsSync, readFileSync } from "fs";
 
 const PORT = 3030;
 
@@ -26,21 +28,51 @@ let isReady = false;
 
 async function initWorker() {
   if (worker) return worker;
-  console.log("[OCR] Initializing Tesseract worker (ara+eng)...");
   const t0 = Date.now();
-  worker = await createWorker("ara+eng", 1, {
-    logger: (m: any) => {
-      if (m.status === "recognizing text") {
-        process.stdout.write(`\r[OCR] ${m.status}: ${Math.round(m.progress * 100)}%`);
-      }
-    },
-  });
-  await worker.setParameters({
-    tessedit_pageseg_mode: PSM.AUTO,
-    preserve_interword_spaces: "1",
-  });
-  console.log(`\n[OCR] Worker ready in ${Date.now() - t0}ms`);
-  isReady = true;
+
+  // Use absolute path for local traineddata files
+  const langDir = resolve(".");
+  console.log("[OCR] Initializing Tesseract worker (ara+eng)...");
+  console.log("[OCR] langPath:", langDir);
+  console.log("[OCR] eng.traineddata exists:", existsSync(`${langDir}/eng.traineddata`));
+  console.log("[OCR] ara.traineddata exists:", existsSync(`${langDir}/ara.traineddata`));
+
+  try {
+    worker = await createWorker("ara+eng", 1, {
+      langPath: langDir,
+      logger: (m: any) => {
+        if (m.status === "recognizing text") {
+          process.stdout.write(`\r[OCR] ${m.status}: ${Math.round(m.progress * 100)}%`);
+        } else {
+          console.log(`[OCR] ${m.status}: ${Math.round(m.progress * 100)}%`);
+        }
+      },
+    });
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.AUTO,
+      preserve_interword_spaces: "1",
+    });
+    console.log(`\n[OCR] Worker ready in ${Date.now() - t0}ms`);
+    isReady = true;
+  } catch (e: any) {
+    console.error("[OCR] Worker init failed:", e?.message?.slice(0, 200));
+    // Fallback: try loading English only (simpler)
+    try {
+      console.log("[OCR] Retrying with English only...");
+      worker = await createWorker("eng", 1, {
+        langPath: langDir,
+        logger: () => {},
+      });
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+      });
+      console.log(`[OCR] English worker ready in ${Date.now() - t0}ms`);
+      isReady = true;
+    } catch (e2: any) {
+      console.error("[OCR] English fallback failed:", e2?.message?.slice(0, 200));
+      worker = null;
+    }
+  }
   return worker;
 }
 
