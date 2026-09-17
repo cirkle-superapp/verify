@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSession, updateSession, getAllSessions } from "@/lib/session-manager";
 import { getClientIp } from "@/lib/rate-limit";
+import { requireApiKey } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 
 // POST /api/v1/verify/session — create a new verification session
+// AUTH: Requires API key
 export async function POST(req: NextRequest) {
+  const auth = await requireApiKey(req);
+  if (auth instanceof Response) return auth;
   const ip = getClientIp(req);
   const session = createSession(ip);
   return NextResponse.json({ session }, { status: 201 });
 }
 
 // GET /api/v1/verify/session — list all sessions (admin) or get by ?id=
+// AUTH: Requires API key
 export async function GET(req: NextRequest) {
+  const auth = await requireApiKey(req);
+  if (auth instanceof Response) return auth;
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (id) {

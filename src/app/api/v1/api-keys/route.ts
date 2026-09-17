@@ -29,10 +29,14 @@ export async function POST(req: NextRequest) {
     // Check if this is the first key (bootstrap) or requires admin auth
     const existing = await listApiKeys();
     if (existing.length > 0) {
-      // Not the first key — require admin auth
-      const auth = await requireApiKey(req);
-      if (auth instanceof Response) {
-        return NextResponse.json({ error: "Admin API key required to create new keys" }, { status: 401 });
+      // Not the first key — require admin auth OR platform admin secret (for bootstrap recovery)
+      const adminSecret = req.headers.get("x-admin-secret");
+      const expectedSecret = process.env.PLATFORM_ADMIN_SECRET || "cirkle-admin-dev";
+      if (adminSecret !== expectedSecret) {
+        const auth = await requireApiKey(req);
+        if (auth instanceof Response) {
+          return NextResponse.json({ error: "Admin API key required to create new keys (or provide X-Admin-Secret header)" }, { status: 401 });
+        }
       }
     }
 

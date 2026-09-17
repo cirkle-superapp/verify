@@ -77,7 +77,9 @@ async function ensureSchema() {
       rate_limit_per_min INTEGER NOT NULL DEFAULT 60,
       total_requests INTEGER NOT NULL DEFAULT 0
     )`);
-  } catch {}
+  } catch (e: any) {
+    console.error("[api-auth] ensureSchema failed:", e?.message?.slice(0, 150));
+  }
 }
 
 /**
