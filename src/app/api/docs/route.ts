@@ -40,7 +40,7 @@ export async function GET() {
         {
           method: "POST",
           path: "/api/verify/liveness-pro",
-          description: "Standalone Liveness Pro analysis (directional motion + challenge-response + anti-spoofing + temporal)",
+          description: "Standalone Liveness Pro v2 analysis: directional motion + challenge-response + anti-spoofing (print/screen/depth) + temporal + 7 new PAD signals (optical-flow consistency, LBP texture, FFT moiré, color distortion, 3D depth disparity, specular highlights, blink) + aggregate PAD score",
           body: { frames: "string[]", actions: "LivenessAction[]" },
           response: "LivenessProScore",
         },
@@ -70,8 +70,8 @@ export async function GET() {
         {
           method: "POST",
           path: "/api/verify/cross-check",
-          description: "Cross-field validation: checks 17 consistency rules between extracted fields",
-          body: "CrossFieldInput {fullNameAr, fullNameEn, nationalId, country, birthDate, gender, expiryDate, nationality, documentNo, mrzText, docType}",
+          description: "Cross-field validation: runs 30 consistency checks (ID format/checksum, ID-gender/birthDate/birthPlace, name scripts, Arabic name dictionary, MRZ TD1/2/3 checksums, MRZ-name/docnum/nationality/birthDate/gender/expiry match, age plausibility, document validity period, issue date plausibility, issue-after-birth, photo-gender heuristic, name length sanity, required-field presence, date format, gender enum, document-number format, issue-place plausibility, cross-language name similarity, expiry-recently-issued)",
+          body: "CrossFieldInput {fullNameAr, fullNameEn, nationalId, country, birthDate, gender, expiryDate, issueDate, nationality, documentNo, mrzText, docType, birthPlace, issuePlace, photoGender, photoPresent}",
           response: { flags: "CrossFieldFlag[]", consistencyScore: "number", fraudProbability: "number", hasCritical: "boolean", securitySpec: "DocumentSecuritySpec" },
         },
         {
@@ -84,9 +84,9 @@ export async function GET() {
         {
           method: "POST",
           path: "/api/verify/face-quality",
-          description: "Score face image quality on 5 dimensions (ISO/IEC 19794-5): brightness, contrast, sharpness, face size, background",
-          body: { image: "data:image/jpeg;base64,..." },
-          response: "FaceQualityScore (5 sub-scores + overall + issues + suggestions + pass)",
+          description: "Score face image quality on 13 dimensions (ISO/IEC 19794-5 v2): 5 legacy (brightness, contrast, sharpness, face size, background) + 8 new (pose, occlusion, lighting uniformity, color naturalness, background simplicity, face symmetry, defocus blur, motion blur) + composite quality + optional landmark-based pose estimation",
+          body: { image: "data:image/jpeg;base64,...", landmarks: "optional Array<{x,y}> (5/68/468-point)" },
+          response: "FaceQualityScore (5 legacy + 8 new sub-scores + overall + compositeQuality + issues + suggestions + pass)",
         },
       ],
       platform: [
@@ -197,7 +197,7 @@ export async function GET() {
     knowledgeBase: {
       idValidators: "54 countries with checksum algorithms (Luhn, ISO 7064, Verhoeff, mod-11/23/26/31/97)",
       mrzParser: "ICAO 9303 TD1/TD2/TD3 with check digit validation",
-      crossFieldValidation: "17 consistency checks (ID-gender, ID-birthDate, MRZ-match, name script, dates, nationality)",
+      crossFieldValidation: "30 consistency checks (ID format/checksum, ID-gender/birthDate/birthPlace, name scripts, Arabic name dictionary, MRZ TD1/2/3 checksums, MRZ field matches, age plausibility, document validity period, issue date plausibility, issue-after-birth, photo-gender heuristic, name length, required fields, date format, gender enum, document-number format, issue-place plausibility, cross-language name similarity, expiry-recently-issued)",
       ocrPostProcessing: "Levenshtein + confusion patterns (O→0, l→1, S→5), 190+ name dictionary",
       faceQuality: "ISO/IEC 19794-5 (brightness, contrast, sharpness, face size, background)",
       livenessPro: "Directional motion + challenge-response + anti-spoof (print, screen, depth) + temporal",

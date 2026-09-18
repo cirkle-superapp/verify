@@ -301,8 +301,12 @@ export function parseTD3(lines: string[]): MrzResult {
   const passportCheckValid = verifyCheckDigit(l2.slice(0, 9), passportCheck);
   const birthCheckValid = verifyCheckDigit(birthStr, birthCheck);
   const expiryCheckValid = verifyCheckDigit(expiryStr, expiryCheck);
-  // Composite: passport_number + check + birth + check + expiry + check + personal_number
-  const compositeInput = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 43);
+  // Composite: passport_number + check + birth + check + sex + expiry + check + personal_number
+  // (ICAO 9303 TD3: covers positions 1-10, 14-21, 22-42 of line 2 — NOT the composite
+  // check digit itself at position 43.)
+  // Previous code used slice(21, 43) which included the compositeCheck digit (l2[42]) and
+  // omitted sex (l2[20]) — fixed in Task 9-a so composite validation actually works.
+  const compositeInput = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(20, 42);
   const compositeCheckValid = verifyCheckDigit(compositeInput, compositeCheck);
 
   if (!passportCheckValid) errors.push("passport number check digit mismatch");
