@@ -1,0 +1,8 @@
+{
+  "name": "FUNSD",
+  "purpose": "Document layout understanding",
+  "preprocessing": "Extract form fields, map to ID document structure",
+  "size_gb": 0.03,
+  "downloaded": false,
+  "note": "Download failed \u2014 see manual instructions above"
+}
