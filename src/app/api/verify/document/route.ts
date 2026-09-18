@@ -294,6 +294,10 @@ export async function POST(req: NextRequest) {
         rawTextPreview: (consensus?.rawText || selfHosted?.rawText || "").slice(0, 200),
         fallbackParsed: data.extraFields?._fallbackParsed === "true",
         imageQuality: data.imageQuality?.overallQuality,
+        selfHostedError: selfHosted?.reasoning?.slice(0, 150),
+        consensusAgreement: data.consensus?.agreement,
+        consensusSuccessful: data.consensus?.successful,
+        consensusTotal: data.consensus?.total,
       },
     });
   } catch (e: any) {
