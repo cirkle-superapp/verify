@@ -101,7 +101,7 @@ export function getConfiguredProviders(): string[] {
 }
 
 /** Per-provider timeout — optimized for speed (was 15s, now 8s). */
-const PROVIDER_TIMEOUT_MS = 8_000;
+const PROVIDER_TIMEOUT_MS = 12_000;
 
 /**
  * Run a vision prompt against multiple providers IN PARALLEL.
