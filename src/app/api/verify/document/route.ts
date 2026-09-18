@@ -285,6 +285,16 @@ export async function POST(req: NextRequest) {
       engine: consensusActive ? "consensus-merged" : "self-hosted",
       consensus: data.consensus,
       providers: consensusActive ? getConfiguredProviders() : [],
+      debug: {
+        selfHostedPresent: !!selfHosted,
+        consensusPresent: !!consensus,
+        arabicTextPresent: !!(consensus?.arabicText || selfHosted?.arabicText),
+        rawTextPresent: !!(consensus?.rawText || selfHosted?.rawText),
+        arabicTextPreview: (consensus?.arabicText || selfHosted?.arabicText || "").slice(0, 200),
+        rawTextPreview: (consensus?.rawText || selfHosted?.rawText || "").slice(0, 200),
+        fallbackParsed: data.extraFields?._fallbackParsed === "true",
+        imageQuality: data.imageQuality?.overallQuality,
+      },
     });
   } catch (e: any) {
     console.error("[/api/verify/document] error", e);
