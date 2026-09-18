@@ -13,6 +13,8 @@
 import { createWorker, PSM } from "tesseract.js";
 import sharp from "sharp";
 import { parseDataUrl } from "@/lib/image-server";
+import { resolve } from "path";
+import { existsSync } from "fs";
 
 let arabicWorker: any = null;
 let englishWorker: any = null;
@@ -21,16 +23,31 @@ let englishWorker: any = null;
  * Initialize Tesseract workers for Arabic and English.
  * Workers are cached across requests for performance.
  *
- * NOTE: Tesseract.js has a known worker-path resolution bug in some
- * environments (Bun, Docker, sandbox) where it resolves to /ROOT/...
- * instead of the correct node_modules path. We catch this gracefully
- * and return null — the caller falls back to AI consensus extraction.
+ * Uses langPath to find local traineddata files. On Vercel (Node.js),
+ * Tesseract.js downloads traineddata from CDN by default, which can
+ * be slow or fail. We try to use local files first, then fall back
+ * to CDN download.
  */
 async function getArabicWorker() {
   if (!arabicWorker) {
     try {
+      // Try to find local traineddata files
+      const possiblePaths = [
+        resolve("./node_modules/tesseract.js-data"), // npm installed
+        resolve("./mini-services/ocr"), // local traineddata from mini-service
+        resolve("."), // current directory
+      ];
+      let langPath = undefined;
+      for (const p of possiblePaths) {
+        if (existsSync(`${p}/eng.traineddata`) || existsSync(`${p}/eng.traineddata.gz`)) {
+          langPath = p;
+          break;
+        }
+      }
+
       arabicWorker = await createWorker("ara+eng", 1, {
-        logger: () => {}, // silence logs
+        langPath: langPath || undefined, // undefined = use CDN (default)
+        logger: () => {},
         errorHandler: (err: any) => {
           console.error("[ocr-engine] Tesseract worker error:", err?.message?.slice(0, 100));
         },
