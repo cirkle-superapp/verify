@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       // Wait for consensus to finish first (the fast track)
       consensus = await consensusPromise;
       // Give self-hosted an 8s grace window to also complete
-      const graceDeadline = 8000;
+      const graceDeadline = 4000;
       const selfHostedTimeout = new Promise<null>((resolve) =>
         setTimeout(() => resolve(null), graceDeadline)
       );
