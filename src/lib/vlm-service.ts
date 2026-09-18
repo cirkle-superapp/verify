@@ -426,6 +426,94 @@ export async function extractDocumentData(
     raw = { rawText: arabicText };
   }
 
+  // ─── FALLBACK: If AI structured extraction returned no fields, use rule-based parser on arabicText ──
+  // This fixes the case where AI providers return raw OCR text but not structured JSON
+  if (arabicText && !raw.fullNameAr && !raw.fullNameEn && !raw.nationalId && !raw.gender) {
+    try {
+      // Parse the Arabic OCR text using the doc-parser's rule-based extraction
+      const lines = arabicText.split("\n").map(l => l.trim());
+      
+      // Extract name: look for line after "الإسم" or "الاسم" or "Name"
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/^(الإسم|الاسم|Name)\s*:?/i.test(line) && i + 1 < lines.length) {
+          const nameLine = lines[i + 1].trim();
+          if (nameLine.length > 3 && /[\u0600-\u06FFa-zA-Z]/.test(nameLine)) {
+            if (!raw.fullNameAr && /[\u0600-\u06FF]/.test(nameLine)) {
+              raw.fullNameAr = nameLine;
+            }
+            if (!raw.fullNameEn && /[a-zA-Z]/.test(nameLine) && !/[\u0600-\u06FF]/.test(nameLine)) {
+              raw.fullNameEn = nameLine;
+            }
+          }
+          // Also check if name is on the SAME line after the label
+          const afterLabel = line.replace(/^(الإسم|الاسم|Name)\s*:?\s*/i, "").trim();
+          if (afterLabel.length > 3 && !raw.fullNameAr && /[\u0600-\u06FF]/.test(afterLabel)) {
+            raw.fullNameAr = afterLabel;
+          }
+        }
+      }
+
+      // Extract birth date: look for pattern near "تاريخ الميلاد" or date patterns
+      if (!raw.birthDate) {
+        const dateMatch = arabicText.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+        if (dateMatch) {
+          raw.birthDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        }
+        // Also check Arabic numerals
+        const arabicDateMatch = arabicText.match(/([\u0660-\u0669]{4})[\/\-]([\u0660-\u0669]{2})[\/\-]([\u0660-\u0669]{2})/);
+        if (arabicDateMatch) {
+          const toLatin = (s: string) => s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
+          raw.birthDate = `${toLatin(arabicDateMatch[1])}-${toLatin(arabicDateMatch[2])}-${toLatin(arabicDateMatch[3])}`;
+        }
+      }
+
+      // Extract gender: look for ذكر/أنثى/Male/Female
+      if (!raw.gender) {
+        if (/ذكر|Male/i.test(arabicText)) raw.gender = "Male";
+        else if (/أنثى|انثى|Female/i.test(arabicText)) raw.gender = "Female";
+      }
+
+      // Extract nationality: look for مصري/سعودي/etc near "الجنسية"
+      if (!raw.nationality) {
+        const natMatch = arabicText.match(/(?:الجنسية|Nationality)\s*:?\s*(\S+)/);
+        if (natMatch) raw.nationality = natMatch[1];
+        // Also check common patterns: "مصري" "سعودي" etc on a line
+        const natPatterns = arabicText.match(/\b(مصري|سعودي|إماراتي|كويتي|قطري|أردني|مغربي|تونسي|جزائري|لبناني|عراقي|سوري|ليبي|سوداني|بحريني|عماني|يمني|فلسطيني|تركي|إيراني)\b/);
+        if (natPatterns && !raw.nationality) raw.nationality = natPatterns[1];
+      }
+
+      // Extract national ID: look for 14-digit pattern
+      if (!raw.nationalId) {
+        const idMatch = arabicText.match(/\b(\d{14})\b/);
+        if (idMatch) raw.nationalId = idMatch[1];
+        // Also check after "الرقم القومي"
+        const idLabelMatch = arabicText.match(/(?:الرقم القومي|National ID)\s*:?\s*(\d{14})/);
+        if (idLabelMatch) raw.nationalId = idLabelMatch[1];
+      }
+
+      // Extract passport/document number: look for letter+digit pattern
+      if (!raw.documentNo) {
+        const docMatch = arabicText.match(/\b([A-Z]\d{7,8})\b/);
+        if (docMatch) raw.documentNo = docMatch[1];
+        const passportMatch = arabicText.match(/(?:رقم الجواز|Passport No)\s*:?\s*([A-Z0-9]+)/i);
+        if (passportMatch) raw.documentNo = passportMatch[1];
+      }
+
+      // Extract address: look for after "العنوان"
+      if (!raw.address) {
+        const addrMatch = arabicText.match(/(?:العنوان|Address)\s*:?\s*(.+)/);
+        if (addrMatch) raw.address = addrMatch[1].trim().split("\n")[0];
+      }
+
+      // Extract job: look for after "الوظيفة"
+      if (!raw.job) {
+        const jobMatch = arabicText.match(/(?:الوظيفة|Occupation|Profession)\s*:?\s*(.+)/);
+        if (jobMatch) raw.job = jobMatch[1].trim().split("\n")[0];
+      }
+    } catch {}
+  }
+
   // Post-process
   const nationalId = digitsOnly(raw.nationalId);
   const idInfo = docType === "national_id" && nationalId ? parseEgyptianNationalId(nationalId) : null;
