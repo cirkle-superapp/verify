@@ -100,14 +100,14 @@ export function getConfiguredProviders(): string[] {
   return configuredProviders();
 }
 
-/** Per-provider timeout — optimized for speed (was 15s, now 8s). */
+/** Per-provider timeout — balanced for reliability (12s). */
 const PROVIDER_TIMEOUT_MS = 12_000;
 
 /**
  * Run a vision prompt against multiple providers IN PARALLEL.
- * Uses EARLY-RETURN strategy: resolves as soon as the FIRST provider
- * returns a non-empty result (doesn't wait for all to finish/timeout).
- * This cuts extraction time from ~38s to ~3-8s (speed of fastest provider).
+ * Strategy: race all providers, return as soon as the FIRST one returns
+ * non-empty text (don't wait for others). If all return empty/timeout,
+ * return whatever we have (even if all empty).
  */
 async function runVisionProviders(
   prompt: string,
@@ -120,50 +120,28 @@ async function runVisionProviders(
   tasks.push({ provider: "openrouter-ling-vl", fn: () => openRouterVision(prompt, images) });
   tasks.push({ provider: "nvidia-llama-vision", fn: () => nvidiaVision(prompt, images) });
 
-  // Early-return: resolve as soon as ANY provider returns non-empty result
-  // Other providers continue in background (results collected if they finish)
-  const startTime = Date.now();
-  const allResults: { provider: string; raw: string; latencyMs: number }[] = [];
-  let firstResult: { provider: string; raw: string; latencyMs: number } | null = null;
-
-  const promises = tasks.map(async (t) => {
+  // Create per-provider promises with timeout
+  const providerPromises = tasks.map(async (t) => {
     const s = Date.now();
     try {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), PROVIDER_TIMEOUT_MS)
       );
       const raw = await Promise.race([t.fn(), timeout]);
-      const result = { provider: t.provider, raw, latencyMs: Date.now() - s };
-      // If this is the first non-empty result, store it for early return
-      if (!firstResult && raw && raw.trim().length > 0) {
-        firstResult = result;
-      }
-      allResults.push(result);
-      return result;
+      return { provider: t.provider, raw, latencyMs: Date.now() - s };
     } catch (e: any) {
-      const result = { provider: t.provider, raw: "", latencyMs: Date.now() - s };
-      allResults.push(result);
-      return result;
+      return { provider: t.provider, raw: "", latencyMs: Date.now() - s };
     }
   });
 
-  // Race: either wait for first non-empty result, or timeout after PROVIDER_TIMEOUT_MS
-  const firstNonEmpty = await Promise.race([
-    ...promises,
-    new Promise<{ provider: string; raw: string; latencyMs: number }>((resolve) =>
-      setTimeout(() => resolve({ provider: "timeout", raw: "", latencyMs: Date.now() - startTime }), PROVIDER_TIMEOUT_MS + 2000)
-    ),
-  ]);
-
-  // If we got a first result, return immediately with all results collected so far
-  // Other providers may still be running — we don't wait for them
-  if (firstResult && firstResult.raw.trim().length > 0) {
-    return allResults; // return whatever we have so far (at least 1 non-empty)
-  }
-
-  // If no early result, wait for all to finish (they'll timeout at PROVIDER_TIMEOUT_MS)
-  await Promise.allSettled(promises);
-  return allResults;
+  // Wait for ALL providers to finish (each has its own 12s timeout)
+  // This is more reliable than early-return — no race condition on empty results
+  const results = await Promise.allSettled(providerPromises);
+  return results.map((r, i) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { provider: tasks[i].provider, raw: "", latencyMs: 0 }
+  );
 }
 
 function buildFieldConsensus(
