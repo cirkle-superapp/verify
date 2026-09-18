@@ -106,6 +106,79 @@ function mergeSelfHostedAndConsensus(
 
   merged.passes = (selfHosted.passes || 0) + (consensus.passes || 0);
 
+  // ─── FINAL FALLBACK: If all extraction failed but Arabic OCR text is available ──
+  // Parse the arabicText using rule-based regex to extract fields
+  if (merged.arabicText && !merged.fullNameAr && !merged.nationalId && !merged.gender) {
+    const text = merged.arabicText;
+    const lines = text.split("\n").map((l: string) => l.trim());
+    
+    // Name: line after a line containing "الاسم" or "الإسم"
+    if (!merged.fullNameAr) {
+      for (let i = 0; i < lines.length; i++) {
+        if (/(الإسم|الاسم)/i.test(lines[i]) && i + 1 < lines.length) {
+          const next = lines[i + 1].trim();
+          if (next.length > 5 && /[\u0600-\u06FF]/.test(next) && !/[/d:：]/.test(next)) {
+            merged.fullNameAr = next;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Gender: ذكر = Male, أنثى = Female
+    if (!merged.gender) {
+      if (/ذكر\b/.test(text)) merged.gender = "Male";
+      else if (/أنثى|انثى\b/.test(text)) merged.gender = "Female";
+    }
+    
+    // Nationality: match nationality words
+    if (!merged.nationality) {
+      const m = text.match(/\b(مصري|سعودي|إماراتي|كويتي|قطري|أردني|مغربي|تونسي|جزائري|لبناني|عراقي|سوري|ليبي|سوداني|بحريني|عماني|يمني|فلسطيني|تركي|إيراني)\b/);
+      if (m) merged.nationality = m[1];
+    }
+    
+    // Birth date: Arabic numerals ١٩٨٧/٠٧/١٨ or Latin 1987/07/18
+    if (!merged.birthDate) {
+      const toLatin = (s: string) => s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
+      const arDate = text.match(/([\u0660-\u0669]{4})[\/\-]([\u0660-\u0669]{2})[\/\-]([\u0660-\u0669]{2})/);
+      if (arDate) merged.birthDate = `${toLatin(arDate[1])}-${toLatin(arDate[2])}-${toLatin(arDate[3])}`;
+      if (!merged.birthDate) {
+        const latDate = text.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+        if (latDate) merged.birthDate = `${latDate[1]}-${latDate[2]}-${latDate[3]}`;
+      }
+    }
+    
+    // National ID: 14 digits (Arabic or Latin)
+    if (!merged.nationalId) {
+      const toLatin = (s: string) => s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
+      const arId = text.match(/([\u0660-\u0669]{10,14})/);
+      if (arId) merged.nationalId = toLatin(arId[1]);
+      if (!merged.nationalId) {
+        const latId = text.match(/(\d{14})/);
+        if (latId) merged.nationalId = latId[1];
+      }
+    }
+    
+    // Job: after "الوظيفة" or "المهنة"
+    if (!merged.job) {
+      const m = text.match(/(?:الوظيفة|المهنة)\s*:?\s*(.+)/);
+      if (m) merged.job = m[1].trim().split(/[/\n]/)[0].trim();
+    }
+    
+    // Address: after "العنوان"
+    if (!merged.address) {
+      const m = text.match(/(?:العنوان)\s*:?\s*(.+)/);
+      if (m) merged.address = m[1].trim().split("\n")[0];
+    }
+    
+    // If we extracted any fields, boost confidence
+    if (merged.fullNameAr || merged.gender || merged.nationalId) {
+      if (!merged.extraFields) merged.extraFields = {};
+      merged.extraFields._fallbackParsed = "true";
+      if (merged.confidence < 0.5) merged.confidence = 0.6;
+    }
+  }
+
   return merged;
 }
 
