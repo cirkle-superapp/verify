@@ -71,3 +71,7 @@ tool-results/
 # Generated screenshots (may contain credentials)
 /screenshots/
 DATASET_INDEX.json
+
+# Trained model files (large, rebuildable)
+/models/
+/training/out/

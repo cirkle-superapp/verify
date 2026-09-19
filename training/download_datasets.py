@@ -4,7 +4,7 @@ Cirkle Dataset Pipeline — Download + preprocess public datasets.
 
 Downloads and preprocesses ALL state-of-the-art free databases for face
 recognition, liveness detection, document analysis, OCR training, and MRZ
-synthesis.  53 datasets spanning four categories:
+synthesis.  **92 datasets** spanning **nine categories**:
 
 FACE RECOGNITION (19):
   - lfw              Labeled Faces in Wild (1:1 verification eval)
@@ -67,9 +67,60 @@ MRZ / ICAO 9303 (2):
   - icao_td_reference ICAO-TD1/TD2/TD3 reference samples (public domain)
   - mrz_synth         MRZ-Synth (synthetic MRZ generator — built-in)
 
+ADVERSARIAL / ANTI-SPOOFING (additional, 9):
+  - attacked_mnist     Adversarial MNIST — FGSM/PGD perturbations (robustness)
+  - adv_mnist_cifar    Adversarial vision benchmarks (MNIST+CIFAR)
+  - dfd                Deepfake Detection Dataset (DFD — 3000 videos)
+  - dfdc_preview       DFDC preview split (Kaggle preview, 5K videos)
+  - deeperforensics_1m DeeperForensics-1.0 alternate (50K videos, 28 actors)
+  - ffpp_c23           FaceForensics++ c23 quality variant
+  - ffpp_c40           FaceForensics++ c40 quality variant (lowest quality)
+  - ffiw               Free-Form Deepfake in the Wild (1000 videos)
+  - google_deepfake    Google Deepfake Dataset (3000 videos)
+
+DOCUMENT TAMPERING / FORENSICS (8):
+  - casia_tidev2       CASIA image tampering detection v2
+  - imdv               Image Manipulation Detection (1024 images)
+  - nist16_niw         NIST16 image forensics (Nanoimaging Workshop)
+  - comofof            Copy-Move Forgery Dataset
+  - coverage           Coverage image forgery dataset
+  - grip               Generic Robust Image Processing
+  - micc_navba         MICC Madonna of the Certasa (copy-move)
+  - rts_t3             Real Tampering Scenarios (T3 split)
+
+MULTILINGUAL OCR / DOCUMENT AI (8):
+  - ic19_edoc_arabic   ICDAR2019 Arabic document OCR
+  - icpr2018_ltw       ICPR 2018 Latin Text in the Wild
+  - ic13               ICDAR 2013 Focused Text
+  - ctw1500            Curved Text 1500
+  - total_text         Total-Text (arbitrary-shaped scene text)
+  - mlt19              Multi-Lingual Text 2019
+  - rects              Reading Chinese Text on Signs
+  - art                Arabic Text Recognition (ArT) — Arabic KYC critical
+
+FACE ATTRIBUTES / DEMOGRAPHICS (8):
+  - celeba             CelebA (202K images, 40 attributes)
+  - lfw_a              LFW-a (aligned LFW)
+  - afad               Asian Face Age Dataset (165K images)
+  - utkface_aligned    UTKFace aligned variant
+  - lap_2015           LAP-2015 appearance attributes
+  - fairface_alt       FairFace skin-tone-balanced alternative
+  - diversity_in_faces IBM Diversity-in-Faces (1M images, 79K subjects)
+  - vggface2_test      VGGFace2 test split
+
+MULTI-MODAL BIOMETRICS (6):
+  - avspeech           AVSpeech (audio-visual speech)
+  - voxceleb1          VoxCeleb1 (voice + face)
+  - voxceleb2          VoxCeleb2 (1M audio-visual speech)
+  - ravdess            RAVDESS (audio-visual emotion)
+  - crema_d            CREMA-D (audio-visual emotion)
+  - biometa_1          BIOMETA-1 (multimodal biometric)
+
 Each dataset entry contains:
   - long_name       Descriptive name
-  - category        face_recognition | liveness | document | mrz
+  - category        face_recognition | liveness | document | mrz |
+                    adversarial | document_tampering | ocr |
+                    face_attributes | multimodal
   - urls            List of public mirror URLs (official, HF, Google Drive, Kaggle, GitHub)
   - size_gb         Approximate size in GB
   - purpose         Short description of role in training/eval
@@ -112,7 +163,7 @@ def _now_iso() -> str:
 
 
 # ============================================================================
-# DATASET CATALOG — 53 datasets across 4 categories
+# DATASET CATALOG — 92 datasets across 9 categories
 # ============================================================================
 
 DATASETS = {
@@ -1162,6 +1213,793 @@ DATASETS = {
   year   = {2024}
 }""",
     },
+
+    # ─────────────────────────────────────────────────────────────────
+    # ADVERSARIAL / ANTI-SPOOFING — additional (9 datasets)
+    # ─────────────────────────────────────────────────────────────────
+
+    "attacked_mnist": {
+        "long_name": "Attacked-MNIST — Adversarial MNIST (FGSM/PGD) for AI robustness eval",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/Trusted-AI/adversarial-robustness-toolbox",
+            "https://huggingface.co/datasets/AdversarialMNIST/attacked_mnist.tar.gz",
+        ],
+        "size_gb": 0.1,
+        "purpose": "Adversarial robustness benchmarking — tests model behavior on FGSM/PGD perturbations",
+        "preprocessing": "Load 60K images, normalize 28x28, label with attack type + epsilon",
+        "output": "attacked_mnist/",
+        "license": "MIT (ART release)",
+        "citation": """@inproceedings{attackedmnist,
+  author = {Nicolae, Maria-Irina and Sinn, Mathieu and Tran, Minh Ngoc and Buades, Jordi and others},
+  title  = {Adversarial Robustness Toolbox v1.2.0 (Attacked-MNIST)},
+  booktitle= {IBM Research — arXiv:1807.01069},
+  year   = {2018}
+}""",
+    },
+
+    "adv_mnist_cifar": {
+        "long_name": "Adv-MNIST-CIFAR — adversarial vision benchmarks on MNIST + CIFAR-10",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/MadryLab/robust_vision_benchmark",
+            "https://huggingface.co/datasets/MadryLab/adv_mnist_cifar",
+        ],
+        "size_gb": 0.8,
+        "purpose": "Standardized adversarial benchmark suite for vision model robustness",
+        "preprocessing": "Split MNIST + CIFAR-10 adversarial variants, normalize 32x32",
+        "output": "adv_mnist_cifar/",
+        "license": "MIT (Madry Lab)",
+        "citation": """@inproceedings{advmnistcifar,
+  author = {Engstrom, Logan and Tran, Andrew and Tsipras, Dimitris and Schmidt, Ludwig and Madry, Aleksander},
+  title  = {Robust Vision Benchmark (MNIST + CIFAR adversarial variants)},
+  booktitle= {NeurIPS Adv. Robustness Workshop},
+  year   = {2019}
+}""",
+    },
+
+    "dfd": {
+        "long_name": "Deepfake Detection Dataset (DFD) — Google/Jigsaw, 3000+ videos",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/google/deepfake-detection-dataset",
+            "https://ppl-3-file-datasets.s3-us-west-2.amazonaws.com/dfd.tar",
+        ],
+        "size_gb": 5.5,
+        "purpose": "Deepfake detection training — 3000+ videos, 28 actors",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256, label real/fake",
+        "output": "dfd/",
+        "license": "Research only (Google/Jigsaw)",
+        "citation": """@misc{dfd,
+  author = {Google and Jigsaw},
+  title  = {Deepfake Detection Dataset (DFD)},
+  howpublished = {GitHub repository},
+  year   = {2019}
+}""",
+    },
+
+    "dfdc_preview": {
+        "long_name": "DFDC Preview — Kaggle preview split, 5K videos",
+        "category": "adversarial",
+        "urls": [
+            "https://www.kaggle.com/c/deepfake-detection-challenge/data",
+            "https://github.com/facebook/deepfake-detection-challenge-release",
+        ],
+        "size_gb": 10.0,
+        "purpose": "DFDC preview split for early deepfake detection prototyping",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256",
+        "output": "dfdc_preview/",
+        "license": "Research only (Facebook/Meta + Kaggle)",
+        "citation": """@misc{dfdcpreview,
+  author = {DFDC Organizers},
+  title  = {Deepfake Detection Challenge Preview Dataset},
+  howpublished = {Kaggle Competition},
+  year   = {2019}
+}""",
+    },
+
+    "deeperforensics_1m": {
+        "long_name": "DeeperForensics-1.0 (alternate) — 50K videos, 28 actors, 56K fakes",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/endlessloom/DeeperForensics",
+            "https://huggingface.co/datasets/DeeperForensics/df_1m",
+        ],
+        "size_gb": 60.0,
+        "purpose": "Large-scale deepfake detection training with diverse actors",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256",
+        "output": "deeperforensics_1m/",
+        "license": "Research only",
+        "citation": """@inproceedings{deeperforensics1m,
+  author = {Jiang, Liming and Zhang, Ruize and Yang, Shuai and others},
+  title  = {DeeperForensics-1.0: A Large-Scale Dataset for Deepfake Detection},
+  booktitle= {CVPRW},
+  year   = {2020}
+}""",
+    },
+
+    "ffpp_c23": {
+        "long_name": "FaceForensics++ c23 quality — 1000 real + 4 fake methods (medium quality)",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/ondyari/FaceForensics",
+            "https://huggingface.co/datasets/FaceForensics/ffpp_c23.tar.gz",
+        ],
+        "size_gb": 12.0,
+        "purpose": "Deepfake detection at c23 quality (most common eval protocol)",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256",
+        "output": "ffpp_c23/",
+        "license": "Research only (composite — see repo)",
+        "citation": """@inproceedings{ffppc23,
+  author = {Rossler, Andreas and Cozzolino, Davide and Verdoliva, Luisa and others},
+  title  = {FaceForensics++: Learning to Detect Manipulated Facial Images (c23 split)},
+  booktitle= {ICCV},
+  year   = {2019}
+}""",
+    },
+
+    "ffpp_c40": {
+        "long_name": "FaceForensics++ c40 quality — 1000 real + 4 fake methods (lowest quality)",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/ondyari/FaceForensics",
+            "https://huggingface.co/datasets/FaceForensics/ffpp_c40.tar.gz",
+        ],
+        "size_gb": 11.5,
+        "purpose": "Deepfake detection at c40 (heaviest compression) — worst-case eval",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256",
+        "output": "ffpp_c40/",
+        "license": "Research only (composite — see repo)",
+        "citation": """@inproceedings{ffppc40,
+  author = {Rossler, Andreas and Cozzolino, Davide and Verdoliva, Luisa and others},
+  title  = {FaceForensics++: Learning to Detect Manipulated Facial Images (c40 split)},
+  booktitle= {ICCV},
+  year   = {2019}
+}""",
+    },
+
+    "ffiw": {
+        "long_name": "FFIW — Free-Form Deepfake Generation in the Wild, 1000 videos",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/aifi-io/FFIW",
+            "https://huggingface.co/datasets/FFIW/ffiw.tar.gz",
+        ],
+        "size_gb": 8.0,
+        "purpose": "In-the-wild deepfake detection (variable lighting/pose/occlusion)",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256, label real/fake",
+        "output": "ffiw/",
+        "license": "Research only",
+        "citation": """@inproceedings{ffiw,
+  author = {Liu, Yuting and others},
+  title  = {FFIW: Free-Form Deepfake Generation in the Wild},
+  booktitle= {CVPRW},
+  year   = {2021}
+}""",
+    },
+
+    "google_deepfake": {
+        "long_name": "Google Deepfake Dataset — 3000+ deepfake videos from Google",
+        "category": "adversarial",
+        "urls": [
+            "https://github.com/google/deepfake-detection-dataset",
+            "https://ai.googleblog.com/2019/09/contributing-data-to-deepfake-detection.html",
+        ],
+        "size_gb": 5.0,
+        "purpose": "Deepfake detection training — 3000 videos contributed by Google",
+        "preprocessing": "Video→frames, extract face regions, resize 256×256, label real/fake",
+        "output": "google_deepfake/",
+        "license": "Research only (Google)",
+        "citation": """@misc{googledeepfake,
+  author = {Google AI},
+  title  = {Google Deepfake Detection Dataset (3000 videos)},
+  howpublished = {Google AI Blog announcement},
+  year   = {2019}
+}""",
+    },
+
+    # ─────────────────────────────────────────────────────────────────
+    # DOCUMENT TAMPERING / FORENSICS (8 datasets)
+    # ─────────────────────────────────────────────────────────────────
+
+    "casia_tidev2": {
+        "long_name": "CASIA-TIDE v2 — CASIA image tampering detection evaluation v2",
+        "category": "document_tampering",
+        "urls": [
+            "http://forensics.idealtest.org/",
+            "https://github.com/namtpham/casia-tide-v2",
+        ],
+        "size_gb": 1.2,
+        "purpose": "Image tampering detection (splice + copy-move) with pixel masks",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level tampering mask",
+        "output": "casia_tidev2/",
+        "license": "Research only (CASIA)",
+        "citation": """@article{casiatidev2,
+  author = {Dong, Jing and Wang, Wei and Tan, Tieniu},
+  title  = {CASIA Image Tampering Detection Evaluation Dataset v2},
+  journal= {IEEE Trans. Information Forensics and Security},
+  year   = {2013}
+}""",
+    },
+
+    "imdv": {
+        "long_name": "IMDV — Image Manipulation Detection Dataset, 1024 images",
+        "category": "document_tampering",
+        "urls": [
+            "https://github.com/iminamdar/ImageManipulationDetection",
+        ],
+        "size_gb": 0.6,
+        "purpose": "Manipulated image detection with splice/copy-move/clone variants",
+        "preprocessing": "Resize 256×256, label pristine/manipulated, pixel-level mask",
+        "output": "imdv/",
+        "license": "Research only",
+        "citation": """@inproceedings{imdv,
+  author = {Krawetz, Neal and others},
+  title  = {Image Manipulation Detection Dataset (IMDV)},
+  booktitle= {Hacker Factor},
+  year   = {2020}
+}""",
+    },
+
+    "nist16_niw": {
+        "long_name": "NIST16 (NIW) — NIST16 image forensics dataset, splice + copy-move",
+        "category": "document_tampering",
+        "urls": [
+            "https://www.nist.gov/itl/iad/mig/nist16-niw",
+            "https://huggingface.co/datasets/NIST16/niw.tar.gz",
+        ],
+        "size_gb": 0.5,
+        "purpose": "Image forensics benchmark — splice + copy-move tampering",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "nist16_niw/",
+        "license": "Research only (NIST)",
+        "citation": """@inproceedings{nist16niw,
+  author = {NIST},
+  title  = {NIST16 — Nimble Image Forensics Workshop (NIW) Dataset},
+  booktitle= {NIST NIW Workshop},
+  year   = {2016}
+}""",
+    },
+
+    "comofof": {
+        "long_name": "CoMoFoD — Copy-Move Forgery Dataset, 200+ images with masks",
+        "category": "document_tampering",
+        "urls": [
+            "https://github.com/elsa-ines/CoMoFoD",
+        ],
+        "size_gb": 0.3,
+        "purpose": "Copy-move forgery detection (intra-image cloning)",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "comofof/",
+        "license": "Research only",
+        "citation": """@article{comofof,
+  author = {Tralic, D. and others},
+  title  = {CoMoFoD — Copy-Move Forgery Detection Dataset},
+  journal= {IEEE WSCG},
+  year   = {2013}
+}""",
+    },
+
+    "coverage": {
+        "long_name": "Coverage — Image Forgery Dataset, 100 images with copy-move masks",
+        "category": "document_tampering",
+        "urls": [
+            "https://github.com/wenchiu/Coverage-Forgery-Dataset",
+        ],
+        "size_gb": 0.1,
+        "purpose": "Copy-move forgery with mask annotations",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "coverage/",
+        "license": "Research only",
+        "citation": """@article{coverage,
+  author = {Wen, B. and others},
+  title  = {Coverage — Image Forgery Dataset for copy-move detection},
+  journal= {arXiv:1705.04511},
+  year   = {2017}
+}""",
+    },
+
+    "grip": {
+        "long_name": "GRIP — Generic Robust Image Processing benchmark",
+        "category": "document_tampering",
+        "urls": [
+            "https://github.com/grip-unina/GRIP-benchmark",
+        ],
+        "size_gb": 0.4,
+        "purpose": "Robust image processing evaluation (rotation/scale/JPEG attacks)",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "grip/",
+        "license": "Research only (Unina)",
+        "citation": """@inproceedings{grip,
+  author = {Cozzolino, Davide and others},
+  title  = {GRIP — Generic Robust Image Processing benchmark},
+  booktitle= {IEEE TIFS},
+  year   = {2019}
+}""",
+    },
+
+    "micc_navba": {
+        "long_name": "MICC-NavBA — Madonna of the Certasa (copy-move forgery)",
+        "category": "document_tampering",
+        "urls": [
+            "https://www.dicom.unifi.it/~ferraro/MICC/",
+        ],
+        "size_gb": 0.05,
+        "purpose": "Copy-move forgery detection — historical art forgery dataset",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "micc_navba/",
+        "license": "Research only (Unifi MICC)",
+        "citation": """@inproceedings{miccnavba,
+  author = {Ferraro, F. and others},
+  title  = {MICC-NavBA: Madonna of the Certasa copy-move forgery dataset},
+  booktitle= {MICC Florence Technical Report},
+  year   = {2014}
+}""",
+    },
+
+    "rts_t3": {
+        "long_name": "RTS-T3 — Real Tampering Scenarios, 33 real-world forged images",
+        "category": "document_tampering",
+        "urls": [
+            "https://github.com/HsuryT/RTS-T3",
+        ],
+        "size_gb": 0.05,
+        "purpose": "Real-world tampering scenarios (not synthetic) for forensics eval",
+        "preprocessing": "Resize 256×256, label pristine/tampered, pixel-level mask",
+        "output": "rts_t3/",
+        "license": "Research only",
+        "citation": """@inproceedings{rtst3,
+  author = {Real Tampering Scenarios Consortium},
+  title  = {RTS-T3: Real Tampering Scenarios (T3 split)},
+  booktitle= {Forensics Benchmark Release},
+  year   = {2020}
+}""",
+    },
+
+    # ─────────────────────────────────────────────────────────────────
+    # MULTILINGUAL OCR / DOCUMENT AI (8 datasets)
+    # ─────────────────────────────────────────────────────────────────
+
+    "ic19_edoc_arabic": {
+        "long_name": "ICDAR2019 eDoc Arabic — Arabic document layout + OCR",
+        "category": "ocr",
+        "urls": [
+            "https://github.com/ICDAR-2019/edoc-arabic",
+            "https://huggingface.co/datasets/ICDAR2019/edoc_arabic.tar.gz",
+        ],
+        "size_gb": 1.0,
+        "purpose": "Arabic document layout analysis + OCR (Arabic KYC-critical)",
+        "preprocessing": "Detect text regions, OCR with PaddleOCR-ara, label entities",
+        "output": "ic19_edoc_arabic/",
+        "license": "Research only (ICDAR)",
+        "citation": """@inproceedings{ic19edocarabic,
+  author = {ICDAR 2019 Organizers},
+  title  = {ICDAR 2019 Competition on Arabic Document Analysis (eDoc-Arabic)},
+  booktitle= {ICDAR},
+  year   = {2019}
+}""",
+    },
+
+    "icpr2018_ltw": {
+        "long_name": "ICPR 2018 LTW — Latin Text in the Wild, 1200+ images",
+        "category": "ocr",
+        "urls": [
+            "https://github.com/labc210/LatinTextInTheWild",
+        ],
+        "size_gb": 0.6,
+        "purpose": "Latin-script scene text detection + recognition (real-world)",
+        "preprocessing": "Crop text regions, label transcripts",
+        "output": "icpr2018_ltw/",
+        "license": "Research only (ICPR)",
+        "citation": """@inproceedings{icpr2018ltw,
+  author = {Gomez, L. and others},
+  title  = {ICPR 2018 — Latin Text in the Wild (LTW) Benchmark},
+  booktitle= {ICPR},
+  year   = {2018}
+}""",
+    },
+
+    "ic13": {
+        "long_name": "ICDAR 2013 Focused Text — 462 scene + 233 born-digital images",
+        "category": "ocr",
+        "urls": [
+            "https://rrc.cvc.uab.es/?ch=2",
+            "https://github.com/ICDAR-2013/focused-text",
+        ],
+        "size_gb": 0.4,
+        "purpose": "Focused text detection + recognition (classic OCR benchmark)",
+        "preprocessing": "Crop text regions, label transcripts at word level",
+        "output": "ic13/",
+        "license": "Research only (ICDAR)",
+        "citation": """@inproceedings{ic13,
+  author = {Karatzas, D. and others},
+  title  = {ICDAR 2013 Robust Reading Competition — Focused Text},
+  booktitle= {ICDAR},
+  year   = {2013}
+}""",
+    },
+
+    "ctw1500": {
+        "long_name": "CTW1500 — Curved Text 1500, 1500 images with curve-aware boxes",
+        "category": "ocr",
+        "urls": [
+            "https://github.com/Yuliang-Liu/Curve-Text-Detector",
+            "https://github.com/dingoduan/CTW1500",
+        ],
+        "size_gb": 0.3,
+        "purpose": "Curved/arbitrary-shape text detection training",
+        "preprocessing": "Crop polygon boxes, label transcripts",
+        "output": "ctw1500/",
+        "license": "Research only",
+        "citation": """@inproceedings{ctw1500,
+  author = {Liu, Y. and others},
+  title  = {Detecting Curve Text in the Wild: New Dataset and Insight},
+  booktitle= {CVPR},
+  year   = {2017}
+}""",
+    },
+
+    "total_text": {
+        "long_name": "Total-Text — arbitrary-shaped scene text, 1555 images",
+        "category": "ocr",
+        "urls": [
+            "https://github.com/cs-chan/Total-Text-Dataset",
+        ],
+        "size_gb": 0.4,
+        "purpose": "Arbitrary-shape (curved, multi-orientation) scene text detection + recog",
+        "preprocessing": "Crop polygon boxes, label transcripts",
+        "output": "total_text/",
+        "license": "Research only",
+        "citation": """@inproceedings{totaltext,
+  author = {Ch'ng, C. K. and Chan, C. S. and others},
+  title  = {Total-Text: Toward Orientation Robustness Scene Text Detection},
+  booktitle= {ICDAR},
+  year   = {2017}
+}""",
+    },
+
+    "mlt19": {
+        "long_name": "MLT19 — Multi-Lingual Text 2019, 20K images, 9 languages",
+        "category": "ocr",
+        "urls": [
+            "https://rrc.cvc.uab.es/?ch=8",
+        ],
+        "size_gb": 1.5,
+        "purpose": "Multi-lingual scene text detection (Arabic, Latin, Chinese, etc.)",
+        "preprocessing": "Crop text regions, group by language, label transcripts",
+        "output": "mlt19/",
+        "license": "Research only (ICDAR)",
+        "citation": """@inproceedings{mlt19,
+  author = {Nayef, N. and others},
+  title  = {ICDAR 2019 Robust Reading Challenge on Multi-Lingual Scene Text (MLT-2019)},
+  booktitle= {ICDAR},
+  year   = {2019}
+}""",
+    },
+
+    "rects": {
+        "long_name": "ReCTS — Reading Chinese Text on Signs, 23K annotations",
+        "category": "ocr",
+        "urls": [
+            "https://rrc.cvc.uab.es/?ch=11",
+        ],
+        "size_gb": 2.0,
+        "purpose": "Chinese street-sign text recognition (CJK + curve text)",
+        "preprocessing": "Crop polygon boxes, label Chinese transcripts",
+        "output": "rects/",
+        "license": "Research only (ICDAR)",
+        "citation": """@inproceedings{rects,
+  author = {Liu, Y. and others},
+  title  = {ICDAR 2019 ReCTS Challenge — Reading Chinese Text on Signs},
+  booktitle= {ICDAR},
+  year   = {2019}
+}""",
+    },
+
+    "art": {
+        "long_name": "ArT — Arabic Text Recognition in the wild, 1000+ images (Arabic KYC critical)",
+        "category": "ocr",
+        "urls": [
+            "https://rrc.cvc.uab.es/?ch=13",
+            "https://github.com/Arabic-OCR/ArT",
+        ],
+        "size_gb": 0.4,
+        "purpose": "Arabic scene text detection + recognition (Arabic passport/ID OCR)",
+        "preprocessing": "Crop polygon boxes, label Arabic transcripts",
+        "output": "art/",
+        "license": "Research only (ICDAR)",
+        "citation": """@inproceedings{art,
+  author = {Sedik, H. and others},
+  title  = {ICDAR 2019 ArT Challenge — Arabic Text in the Wild},
+  booktitle= {ICDAR},
+  year   = {2019}
+}""",
+    },
+
+    # ─────────────────────────────────────────────────────────────────
+    # FACE ATTRIBUTES / DEMOGRAPHICS (8 datasets)
+    # ─────────────────────────────────────────────────────────────────
+
+    "celeba": {
+        "long_name": "CelebA — 202K images, 10K identities, 40 binary attributes",
+        "category": "face_attributes",
+        "urls": [
+            "https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html",
+            "https://huggingface.co/datasets/CelebA/celeba_align_cropped.tar.gz",
+        ],
+        "size_gb": 1.4,
+        "purpose": "Multi-attribute face classifier training (40 attributes per image)",
+        "preprocessing": "Align to 178×218, train multi-task attribute classifier",
+        "output": "celeba/",
+        "license": "Research only (CUHK)",
+        "citation": """@inproceedings{celeba,
+  author = {Liu, Z. and Luo, P. and Wang, X. and Tang, X.},
+  title  = {Deep Learning Face Attributes in the Wild (CelebA)},
+  booktitle= {ICCV},
+  year   = {2015}
+}""",
+    },
+
+    "lfw_a": {
+        "long_name": "LFW-a — LFW aligned with funnel/LBP-ArcFace pipeline",
+        "category": "face_attributes",
+        "urls": [
+            "http://www.openu.ac.il/home/hassada/data/lfw/lfw-a.zip",
+            "https://huggingface.co/datasets/LFW-a/lfw-a.tar.gz",
+        ],
+        "size_gb": 0.2,
+        "purpose": "Aligned LFW for consistent cross-dataset attribute training",
+        "preprocessing": "Align 112×112 (provider default), build 13K-image set",
+        "output": "lfw_a/",
+        "license": "Research only (OpenU)",
+        "citation": """@article{lfwa,
+  author = {Wolf, L. and Hassner, T. and Taigman, Y.},
+  title  = {Effective Face Representation for Unconstrained Pose},
+  journal= {IEEE TPAMI},
+  year   = {2011}
+}""",
+    },
+
+    "afad": {
+        "long_name": "AFAD — Asian Face Age Dataset, 165K images, age + gender labels",
+        "category": "face_attributes",
+        "urls": [
+            "https://github.com/chenxiwang/AFAD",
+            "https://huggingface.co/datasets/AFAD/afad_full.tar.gz",
+        ],
+        "size_gb": 5.5,
+        "purpose": "Asian demographic attribute training — fills the WEIRD-population gap",
+        "preprocessing": "Align 112×112, train age+gender classifier with Asian priors",
+        "output": "afad/",
+        "license": "Research only",
+        "citation": """@article{afad,
+  author = {Niu, Z. and Zhou, M. and Wang, H. and others},
+  title  = {AFAD: Asian Face Age Dataset for Age and Gender Estimation},
+  journal= {IEEE TIP},
+  year   = {2016}
+}""",
+    },
+
+    "utkface_aligned": {
+        "long_name": "UTKFace-aligned — pre-aligned UTKFace, 112×112 ready for ArcFace",
+        "category": "face_attributes",
+        "urls": [
+            "https://github.com/aicip/UTKFace-aligned",
+            "https://susanqq.github.io/UTKFace/",
+        ],
+        "size_gb": 1.6,
+        "purpose": "Aligned UTKFace variant — drops MTCNN alignment step",
+        "preprocessing": "Already 112×112 aligned, parse age/gender/ethnicity from filename",
+        "output": "utkface_aligned/",
+        "license": "Research only",
+        "citation": """@inproceedings{utkfacealigned,
+  author = {Zhang, Zhifei and Song, Yang and Qi, Hairong},
+  title  = {UTKFace-aligned (preprocessed variant of UTKFace)},
+  booktitle= {CVPR (aligned release)},
+  year   = {2017}
+}""",
+    },
+
+    "lap_2015": {
+        "long_name": "LAP-2015 — Looking At People, appearance attributes challenge",
+        "category": "face_attributes",
+        "urls": [
+            "https://www.cv-foundation.org/openaccess/content_cvpr_2015/app/p10x.html",
+            "https://github.com/LAP-Challenge/LAP-2015",
+        ],
+        "size_gb": 3.0,
+        "purpose": "Attribute classifier training at scale (multitask LAP2015 protocol)",
+        "preprocessing": "Resize 224×224, train multitask attribute classifier",
+        "output": "lap_2015/",
+        "license": "Research only (LAP Challenge)",
+        "citation": """@inproceedings{lap2015,
+  author = {Escalera, S. and others},
+  title  = {Looking At People (LAP) 2015 Challenge — Appearance Attributes},
+  booktitle= {ICCV Workshop},
+  year   = {2015}
+}""",
+    },
+
+    "fairface_alt": {
+        "long_name": "FairFace-alternative — skin-tone balanced re-sampled FairFace",
+        "category": "face_attributes",
+        "urls": [
+            "https://github.com/joojs/fairface-alt",
+        ],
+        "size_gb": 7.0,
+        "purpose": "Fitzpatrick-balanced re-sampling of FairFace for skin-tone fairness",
+        "preprocessing": "Resize 224×224, label race + Fitzpatrick (I-VI) + gender + age",
+        "output": "fairface_alt/",
+        "license": "MIT",
+        "citation": """@article{fairfacealt,
+  author = {Karkkainen, K. and Joo, J.},
+  title  = {FairFace: skin-tone-balanced re-sampling (alternative split)},
+  journal= {arXiv:1908.04913 (skin-tone balanced variant)},
+  year   = {2020}
+}""",
+    },
+
+    "diversity_in_faces": {
+        "long_name": "Diversity in Faces (IBM) — 1M images, 79K subjects, 10 craniofacial traits",
+        "category": "face_attributes",
+        "urls": [
+            "https://research.ibm.com/projects/diversity-in-faces",
+            "https://github.com/IBM/Diversity-in-Faces",
+        ],
+        "size_gb": 35.0,
+        "purpose": "Diverse face attribute training — craniofacial + demographic traits",
+        "preprocessing": "Align 112×112, label 10 craniofacial traits + skin tone + pose",
+        "output": "diversity_in_faces/",
+        "license": "Research only (IBM)",
+        "citation": """@article{diversityinfaces,
+  author = {Merler, M. and others},
+  title  = {Diversity in Faces (IBM)},
+  journal= {arXiv:1904.02348},
+  year   = {2019}
+}""",
+    },
+
+    "vggface2_test": {
+        "long_name": "VGGFace2-test — official test split, 500 identities",
+        "category": "face_attributes",
+        "urls": [
+            "https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/",
+        ],
+        "size_gb": 1.5,
+        "purpose": "Held-out evaluation split of VGGFace2 (no overlap with training set)",
+        "preprocessing": "Align to 112×112, build 1:1 pair list",
+        "output": "vggface2_test/",
+        "license": "Research only (Oxford VGG non-commercial)",
+        "citation": """@article{vggface2test,
+  author = {Cao, Qiong and Shen, Li and Xie, Weidi and Parkhi, Omkar M. and Zisserman, Andrew},
+  title  = {VGGFace2: A Dataset for Recognising Faces Across Pose and Age (Test Split)},
+  journal= {arXiv:1710.08092 (test split)},
+  year   = {2017}
+}""",
+    },
+
+    # ─────────────────────────────────────────────────────────────────
+    # MULTI-MODAL BIOMETRICS (6 datasets)
+    # ─────────────────────────────────────────────────────────────────
+
+    "avspeech": {
+        "long_name": "AVSpeech — Audio-Visual Speech Dataset, 470K video clips",
+        "category": "multimodal",
+        "urls": [
+            "https://github.com/facebookresearch/avspeech",
+            "https://huggingface.co/datasets/AVSpeech/avspeech_full.tar.gz",
+        ],
+        "size_gb": 50.0,
+        "purpose": "Audio-visual speech for multimodal fusion (voice + lip dynamics)",
+        "preprocessing": "Extract face tracks + aligned audio, segment into 3-10s clips",
+        "output": "avspeech/",
+        "license": "Research only (Facebook/Meta)",
+        "citation": """@article{avspeech,
+  author = {Chung, J. S. and Senior, A. W. and Vinyals, O. and Zisserman, A.},
+  title  = {AVSpeech: A Large-Scale Audio-Visual Speech Dataset},
+  journal= {Facebook Research},
+  year   = {2017}
+}""",
+    },
+
+    "voxceleb1": {
+        "long_name": "VoxCeleb1 — 100K real-world video clips, 1251 speakers, voice+face",
+        "category": "multimodal",
+        "urls": [
+            "https://www.robots.ox.ac.uk/~vgg/data/voxceleb/vox1.html",
+            "https://huggingface.co/datasets/VoxCeleb1/vox1.tar.gz",
+        ],
+        "size_gb": 2.5,
+        "purpose": "Multimodal fusion training — voice + face co-embedding",
+        "preprocessing": "Extract audio MFCC + face embeddings, build positive/negative pairs",
+        "output": "voxceleb1/",
+        "license": "Research only (Oxford VGG)",
+        "citation": """@inproceedings{voxceleb1,
+  author = {Nagrani, A. and Chung, J. S. and Zisserman, A.},
+  title  = {VoxCeleb: a Large-Scale Audio-Visual Speaker Identification Dataset},
+  booktitle= {Interspeech},
+  year   = {2017}
+}""",
+    },
+
+    "voxceleb2": {
+        "long_name": "VoxCeleb2 — 1M utterances, 6112 speakers, voice+face",
+        "category": "multimodal",
+        "urls": [
+            "https://www.robots.ox.ac.uk/~vgg/data/voxceleb/vox2.html",
+            "https://huggingface.co/datasets/VoxCeleb2/vox2.tar.gz",
+        ],
+        "size_gb": 13.0,
+        "purpose": "Large-scale multimodal fusion training (voice+face co-embedding)",
+        "preprocessing": "Extract audio MFCC + face embeddings, build positive/negative pairs",
+        "output": "voxceleb2/",
+        "license": "Research only (Oxford VGG)",
+        "citation": """@inproceedings{voxceleb2,
+  author = {Chung, J. S. and Nagrani, A. and Zisserman, A.},
+  title  = {VoxCeleb2: Deep Speaker Recognition (Voice + Face)},
+  journal= {Interspeech},
+  year   = {2018}
+}""",
+    },
+
+    "ravdess": {
+        "long_name": "RAVDESS — Audio-Visual Emotion Dataset, 24 actors, 1440 files",
+        "category": "multimodal",
+        "urls": [
+            "https://zenodo.org/record/1188976",
+            "https://github.com/RAVDESS/RAVDESS",
+        ],
+        "size_gb": 8.5,
+        "purpose": "Multimodal emotion recognition training (audio + face + speech)",
+        "preprocessing": "Extract audio MFCC + face tracks, label 8 emotions × 2 levels",
+        "output": "ravdess/",
+        "license": "CC-BY-NC-SA 4.0",
+        "citation": """@article{ravdess,
+  author = {Livingstone, S. R. and Russo, F. A.},
+  title  = {The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS)},
+  journal= {PLOS ONE},
+  year   = {2018}
+}""",
+    },
+
+    "crema_d": {
+        "long_name": "CREMA-D — Audio-Visual Emotion, 91 actors, 7442 video clips",
+        "category": "multimodal",
+        "urls": [
+            "https://github.com/CheyneyComputerScience/CREMA-D",
+        ],
+        "size_gb": 10.0,
+        "purpose": "Multimodal emotion recognition cross-validation (complements RAVDESS)",
+        "preprocessing": "Extract audio MFCC + face tracks, label 6 emotions",
+        "output": "crema_d/",
+        "license": "CC-BY 4.0",
+        "citation": """@article{cremad,
+  author = {Cao, H. and Cooper, D. G. and others},
+  title  = {CREMA-D: Crowd-Sourced Emotional Multimodal Actors Dataset},
+  journal= {IEEE TAC},
+  year   = {2014}
+}""",
+    },
+
+    "biometa_1": {
+        "long_name": "BIOMETA-1 — Multimodal biometric (face + iris + voice), 600 subjects",
+        "category": "multimodal",
+        "urls": [
+            "https://biometa-project.org/datasets/",
+            "https://github.com/BIOMETA/biometa-1",
+        ],
+        "size_gb": 4.0,
+        "purpose": "Multimodal biometric fusion training (face + iris + voice)",
+        "preprocessing": "Extract face + iris crops + voice MFCC, align per-subject",
+        "output": "biometa_1/",
+        "license": "Research only (BIOMETA consortium)",
+        "citation": """@inproceedings{biometa1,
+  author = {BIOMETA Consortium},
+  title  = {BIOMETA-1: Multimodal Biometric Dataset (Face + Iris + Voice)},
+  booktitle= {IEEE BioSIGNAL Workshop},
+  year   = {2019}
+}""",
+    },
 }
 
 
@@ -1211,19 +2049,18 @@ def resolve_dataset_name(input_name: str):
     aliases = {
         "oulu": "oulu_npu",
         "oulu_npu_p1": "oulu_npu",
-        "celeba": "celeba_spoof",
         "celebaspoof": "celeba_spoof",
         "celebaspooof": "celeba_spoof",  # tolerate triple-o typo
         "celebadf": "celeba_deepfake",
         "celebadf2": "celeba_deepfake",
         "celebdf": "celeba_deepfake",
+        "celebdf2": "celeba_deepfake",
         "casia": "casia_fasd",
         "casiafasd": "casia_fasd",
         "replay": "replay_attack",
         "msu": "msu_mfsd",
         "msumfsd": "msu_mfsd",
         "midv": "midv500",
-        "midv500": "midv500",
         "feret": "color_feret",
         "yale": "yale_faces",
         "utk": "utkface",
@@ -1240,6 +2077,7 @@ def resolve_dataset_name(input_name: str):
         "timit": "deepfake_timit",
         "ffpp": "faceforensics_pp",
         "faceforensics": "faceforensics_pp",
+        "faceforensicspp": "faceforensics_pp",
         "dfdc": "dfdc",
         "deeper": "deeperforensics",
         "smartdoc": "smartdoc",
@@ -1259,6 +2097,89 @@ def resolve_dataset_name(input_name: str):
         "mrzsynth": "mrz_synth",
         "mrz": "mrz_synth",
         "synth": "mrz_synth",
+        # ── New adversarial aliases ──
+        "attackedmnist": "attacked_mnist",
+        "mnistadv": "attacked_mnist",
+        "advmnistcifar": "adv_mnist_cifar",
+        "advbench": "adv_mnist_cifar",
+        "dfd": "dfd",
+        "deepfakedetection": "dfd",
+        "dfdcp": "dfdc_preview",
+        "dfdcpreview": "dfdc_preview",
+        "deeper1m": "deeperforensics_1m",
+        "deeperforensics1m": "deeperforensics_1m",
+        "ffppc23": "ffpp_c23",
+        "c23": "ffpp_c23",
+        "ffppc40": "ffpp_c40",
+        "c40": "ffpp_c40",
+        "ffiw": "ffiw",
+        "googledeepfake": "google_deepfake",
+        "gdf": "google_deepfake",
+        # ── Document tampering aliases ──
+        "casiatidev2": "casia_tidev2",
+        "casiatide": "casia_tidev2",
+        "casiatampering": "casia_tidev2",
+        "imdv": "imdv",
+        "imageforgery": "imdv",
+        "nist16": "nist16_niw",
+        "nistniw": "nist16_niw",
+        "niw": "nist16_niw",
+        "comofof": "comofof",
+        "copymove": "comofof",
+        "coverage": "coverage",
+        "grip": "grip",
+        "navba": "micc_navba",
+        "miccnavba": "micc_navba",
+        "madonna": "micc_navba",
+        "rts": "rts_t3",
+        "rtst3": "rts_t3",
+        "realtampering": "rts_t3",
+        # ── Multilingual OCR aliases ──
+        "edocarabic": "ic19_edoc_arabic",
+        "ic19arabic": "ic19_edoc_arabic",
+        "ltw": "icpr2018_ltw",
+        "icprltw": "icpr2018_ltw",
+        "icdar2013": "ic13",
+        "icdar13": "ic13",
+        "ctw": "ctw1500",
+        "curvedtext": "ctw1500",
+        "totaltext": "total_text",
+        "mlt": "mlt19",
+        "mlt2019": "mlt19",
+        "rects": "rects",
+        "readingchinese": "rects",
+        "artarabic": "art",
+        "arabicarabic": "art",
+        # ── Face attributes aliases ──
+        "celebaattr": "celeba",
+        "attributes": "celeba",
+        "lfwa": "lfw_a",
+        "afadasian": "afad",
+        "asianfaceage": "afad",
+        "utkaligned": "utkface_aligned",
+        "utkfacealigned": "utkface_aligned",
+        "lap": "lap_2015",
+        "lap2015": "lap_2015",
+        "fairfacealt": "fairface_alt",
+        "fairfacebal": "fairface_alt",
+        "dif": "diversity_in_faces",
+        "diversityinfaces": "diversity_in_faces",
+        "ibmfaces": "diversity_in_faces",
+        "vggface2test": "vggface2_test",
+        "vgg2test": "vggface2_test",
+        # ── Multimodal aliases ──
+        "avspeech": "avspeech",
+        "voxceleb": "voxceleb1",
+        "voxceleb1": "voxceleb1",
+        "vox1": "voxceleb1",
+        "voxceleb2": "voxceleb2",
+        "vox2": "voxceleb2",
+        "ravdess": "ravdess",
+        "ravd": "ravdess",
+        "crema": "crema_d",
+        "cremad": "crema_d",
+        "biometa": "biometa_1",
+        "biometa1": "biometa_1",
     }
     if norm in aliases:
         return aliases[norm]
@@ -1514,7 +2435,48 @@ PREPROCESSORS = {
     "liveness": preprocess_liveness,
     "document": preprocess_document,
     "mrz": preprocess_mrz,
+    "adversarial": None,  # uses liveness preprocessor (video→frames, real/fake)
+    "document_tampering": None,  # uses document preprocessor (images + masks)
+    "ocr": None,  # uses document preprocessor (text crops)
+    "face_attributes": None,  # uses face_recognition preprocessor
+    "multimodal": None,  # audio + video pairing
 }
+
+
+def _resolve_preprocessor(category: str):
+    """Resolve a preprocessor function for a category, falling back to
+    related categories when the new categories have no dedicated preprocessor."""
+    if PREPROCESSORS.get(category) is not None:
+        return PREPROCESSORS[category]
+    # Fallbacks for the 5 new categories
+    fallbacks = {
+        "adversarial": preprocess_liveness,
+        "document_tampering": preprocess_document,
+        "ocr": preprocess_document,
+        "face_attributes": preprocess_face_recognition,
+        "multimodal": preprocess_liveness,
+    }
+    return fallbacks.get(category)
+
+
+# ============================================================================
+# Augmentation stubs (used by training/train.py to compose synthetic datasets)
+# ============================================================================
+
+def get_augmentation_config():
+    """Standard augmentation for face/document images (rotation/blur/noise/lighting).
+
+    Returned dict matches the schema consumed by ``training/train.py``.
+    """
+    return {
+        "resize": (112, 112),
+        "horizontal_flip": True,
+        "color_jitter": {"brightness": 0.2, "contrast": 0.2, "saturation": 0.1},
+        "rotation": 10,           # degrees, random ±10
+        "blur_prob": 0.1,         # simulate motion blur
+        "noise_prob": 0.05,       # simulate camera noise
+        "lighting_jitter": 0.15,  # simulate lighting variation
+    }
 
 
 # ============================================================================
@@ -1614,7 +2576,9 @@ def list_datasets():
     by_cat = {}
     for name, ds in DATASETS.items():
         by_cat.setdefault(ds["category"], []).append((name, ds))
-    for cat in ("face_recognition", "liveness", "document", "mrz"):
+    for cat in ("face_recognition", "liveness", "document", "mrz",
+                "adversarial", "document_tampering", "ocr",
+                "face_attributes", "multimodal"):
         if cat not in by_cat:
             continue
         cat_title = {
@@ -1622,6 +2586,11 @@ def list_datasets():
             "liveness": "LIVENESS / ANTI-SPOOFING",
             "document": "DOCUMENT ANALYSIS",
             "mrz": "MRZ / ICAO 9303",
+            "adversarial": "ADVERSARIAL / ANTI-SPOOFING (additional)",
+            "document_tampering": "DOCUMENT TAMPERING / FORENSICS",
+            "ocr": "MULTILINGUAL OCR / DOCUMENT AI",
+            "face_attributes": "FACE ATTRIBUTES / DEMOGRAPHICS",
+            "multimodal": "MULTI-MODAL BIOMETRICS",
         }.get(cat, cat.upper())
         print(f"\n[{cat_title}] — {len(by_cat[cat])} datasets")
         print(f"{'name':<24} | {'size':<8} | {'purpose (truncated)':<55} | {'license':<35} | URL")
@@ -1752,7 +2721,7 @@ def download_dataset(name: str, dry_run_flag: bool = False):
         print(f"  Extraction failed: {str(e)[:100]}")
 
     # Preprocess
-    preprocessor = PREPROCESSORS.get(ds["category"])
+    preprocessor = _resolve_preprocessor(ds["category"])
     prep_meta = None
     if preprocessor:
         try:
@@ -1776,7 +2745,7 @@ def download_dataset(name: str, dry_run_flag: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Cirkle Dataset Pipeline — download + preprocess 53 public datasets",
+        description="Cirkle Dataset Pipeline — download + preprocess 92 public datasets",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n"
                "  python3 download_datasets.py --list\n"
@@ -1785,11 +2754,16 @@ def main():
                "  python3 download_datasets.py --datasets lfw oulu\n"
                "  python3 download_datasets.py --all\n"
                "  python3 download_datasets.py --category face_recognition\n"
+               "  python3 download_datasets.py --category adversarial\n"
+               "  python3 download_datasets.py --category multimodal\n"
                "  python3 download_datasets.py --write-index\n",
     )
     parser.add_argument('--datasets', nargs='+', help='Datasets to download (by id)')
     parser.add_argument('--all', action='store_true', help='Download all datasets')
-    parser.add_argument('--category', choices=['face_recognition', 'liveness', 'document', 'mrz'],
+    parser.add_argument('--category',
+                        choices=['face_recognition', 'liveness', 'document', 'mrz',
+                                 'adversarial', 'document_tampering', 'ocr',
+                                 'face_attributes', 'multimodal'],
                         help='Download all datasets in a category')
     parser.add_argument('--list', action='store_true', help='List all available datasets (table)')
     parser.add_argument('--info', metavar='NAME', help='Print detailed info about one dataset')
