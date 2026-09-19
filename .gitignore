@@ -70,3 +70,4 @@ tool-results/
 /data/datasets/
 # Generated screenshots (may contain credentials)
 /screenshots/
+DATASET_INDEX.json
