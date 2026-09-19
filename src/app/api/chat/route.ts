@@ -6,6 +6,7 @@ import {
   getKnowledgeStats,
   type KnowledgeChunk,
 } from "@/lib/chatbot-knowledge-base";
+import { ensureZaiConfig } from "@/lib/zai-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -225,6 +226,19 @@ export async function POST(req: NextRequest) {
   let replyText: string;
   const model = "glm-4-plus";
   try {
+    // Bootstrap the z-ai config file from env vars if missing
+    // (required for Vercel production where /etc/.z-ai-config doesn't exist)
+    const configResult = ensureZaiConfig();
+    if (!configResult.ok) {
+      return NextResponse.json(
+        {
+          error: "LLM not configured",
+          code: "llm_config_missing",
+          detail: configResult.error,
+        },
+        { status: 503, headers: CORS_HEADERS },
+      );
+    }
     const zai = await ZAI.create();
     const completion = await zai.chat.completions.create({
       messages: [
