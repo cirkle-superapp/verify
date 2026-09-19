@@ -19,6 +19,7 @@ import { TrainingData } from "@/components/verify/training-data";
 import { SpecsBrowser } from "@/components/verify/specs-browser";
 import { InfraDashboard } from "@/components/verify/infra-dashboard";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
+import { ChatWidget } from "@/components/chatbot/chat-widget";
 
 type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra";
 
@@ -107,6 +108,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* Floating chatbot assistant — RAG-powered, answers KYC / MRZ / liveness questions */}
+      <ChatWidget />
     </div>
   );
 }

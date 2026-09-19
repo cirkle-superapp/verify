@@ -172,6 +172,29 @@ export async function GET() {
           params: "?format=csv|json",
         },
       ],
+      chatbot: [
+        {
+          method: "POST",
+          path: "/api/chat",
+          description: "RAG-powered chatbot. Searches the Cirkle knowledge base (132 doc specs across 73 countries, 54 ID validators, MRZ TD1/TD2/TD3, 30 cross-field checks, OCR patterns, 13 face-quality dimensions, 9 liveness PAD signals, 5 AI consensus providers, verification certificate, risk-adaptive) for the top 8 relevant chunks, then sends those + the conversation history to glm-4-plus via z-ai-web-dev-sdk as a system prompt.",
+          body: { messages: "Array<{role: 'user'|'assistant', content: string}>", sessionId: "string (optional)" },
+          response: { response: "string", sources: "Array<{title, source}>", sessionId: "string", model: "glm-4-plus", timestamp: "string (ISO)", latencyMs: "number" },
+          rateLimit: "20 messages per minute per IP (in-memory)",
+          cors: "enabled (Access-Control-Allow-Origin: *)",
+        },
+        {
+          method: "GET",
+          path: "/api/chat",
+          description: "Chatbot service info + usage instructions + live knowledge-base stats.",
+          response: "ChatInfo (service, model, llmProvider, rateLimit, knowledgeBase, usage)",
+        },
+        {
+          method: "GET",
+          path: "/api/chat/health",
+          description: "Chatbot service health: status (healthy|degraded), live knowledge-base stats, llmProvider, model, rateLimit.",
+          response: "ChatHealth { status, knowledgeBase: KnowledgeStats, llmProvider: 'z-ai-web-dev-sdk', model: 'glm-4-plus', rateLimit: { limit: 20, window: '1m' } }",
+        },
+      ],
     },
     authentication: {
       type: "API Key",

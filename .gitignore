@@ -65,3 +65,8 @@ worklog.md
 # Agent worklog — contains credentials, NEVER commit
 worklog.md
 tool-results/
+
+# Downloaded training datasets (large files)
+/data/datasets/
+# Generated screenshots (may contain credentials)
+/screenshots/
