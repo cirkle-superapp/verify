@@ -117,6 +117,53 @@ function buildSystemPrompt(chunks: KnowledgeChunk[]): string {
   ].join("\n");
 }
 
+/**
+ * Fallback answer builder when the LLM is unavailable.
+ *
+ * This happens on Vercel production where the z-ai SDK's internal API
+ * endpoint (internal-api.z.ai) is not reachable — it's only accessible
+ * from the sandbox dev environment. When that happens, we still want
+ * the chatbot to return useful information from the knowledge base
+ * rather than just an error.
+ *
+ * Returns a markdown-formatted response that:
+ * 1. Notes the LLM is in fallback mode
+ * 2. Lists the top knowledge chunks directly
+ * 3. Provides the chunk content so the user can read the actual specs
+ */
+function buildKnowledgeBaseFallback(query: string, chunks: KnowledgeChunk[]): string {
+  if (chunks.length === 0) {
+    return [
+      "> ⚠️ **Note:** The LLM service is currently in fallback mode (no direct access from this deployment).",
+      "",
+      `I couldn't find any knowledge base entries matching your query: _"${query.slice(0, 100)}"_.`,
+      "",
+      "Try asking about a specific country's document security features (e.g., 'What security features does the Egyptian national ID have?'),",
+      "MRZ validation, ID checksum validation, liveness detection, or face quality scoring.",
+    ].join("\n");
+  }
+
+  const topChunk = chunks[0];
+  const lines: string[] = [
+    "> ⚠️ **Fallback mode** — the LLM service is not directly reachable from this deployment.",
+    "> Returning the top knowledge-base matches for your query directly.",
+    "",
+    `## ${topChunk.title}`,
+    "",
+    topChunk.content,
+  ];
+
+  if (chunks.length > 1) {
+    lines.push("", "## Related Knowledge", "");
+    for (let i = 1; i < Math.min(chunks.length, 4); i++) {
+      const c = chunks[i];
+      lines.push(`### ${i + 1}. ${c.title}`, "", c.content.slice(0, 600) + (c.content.length > 600 ? "…" : ""), "");
+    }
+  }
+
+  return lines.join("\n");
+}
+
 // ─── OPTIONS (CORS preflight) ────────────────────────────────────────
 
 export async function OPTIONS() {
@@ -225,52 +272,43 @@ export async function POST(req: NextRequest) {
   // RAG step 3: call the LLM
   let replyText: string;
   const model = "glm-4-plus";
+  let llmOk = false;
+  let llmError: string | null = null;
   try {
     // Bootstrap the z-ai config file from env vars if missing
     // (required for Vercel production where /etc/.z-ai-config doesn't exist)
     const configResult = ensureZaiConfig();
-    if (!configResult.ok) {
-      return NextResponse.json(
-        {
-          error: "LLM not configured",
-          code: "llm_config_missing",
-          detail: configResult.error,
-        },
-        { status: 503, headers: CORS_HEADERS },
-      );
-    }
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...truncatedMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-      thinking: { type: "disabled" },
-    });
-    replyText = completion?.choices?.[0]?.message?.content || "";
-    if (!replyText) {
-      return NextResponse.json(
-        {
-          error: "LLM returned an empty response",
-          code: "llm_empty",
-        },
-        { status: 502, headers: CORS_HEADERS },
-      );
+    if (configResult.ok) {
+      const zai = await ZAI.create();
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...truncatedMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        ],
+        thinking: { type: "disabled" },
+      });
+      const candidate = completion?.choices?.[0]?.message?.content || "";
+      if (candidate.trim()) {
+        replyText = candidate;
+        llmOk = true;
+      }
+    } else {
+      llmError = configResult.error || "config missing";
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[chat] LLM call failed:", msg);
-    return NextResponse.json(
-      {
-        error: "LLM call failed",
-        code: "llm_error",
-        detail: msg.slice(0, 500),
-      },
-      { status: 502, headers: CORS_HEADERS },
-    );
+    llmError = msg.slice(0, 200);
+  }
+
+  // Fallback: build a knowledge-base-only answer if LLM is unavailable.
+  // This happens on Vercel production where internal-api.z.ai is not
+  // reachable (sandbox-only) or when the API token is invalid.
+  if (!llmOk) {
+    replyText = buildKnowledgeBaseFallback(query, chunks);
   }
 
   const sessionId = body.sessionId || randomUUID();
@@ -281,7 +319,9 @@ export async function POST(req: NextRequest) {
       response: replyText,
       sources: chunks.map((c) => ({ title: c.title, source: c.source })),
       sessionId,
-      model,
+      model: llmOk ? model : `${model}-fallback-kb`,
+      mode: llmOk ? "llm" : "knowledge-base-fallback",
+      llmError: llmOk ? null : llmError,
       timestamp: new Date().toISOString(),
       latencyMs,
     },
