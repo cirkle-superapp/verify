@@ -171,7 +171,7 @@ export async function GET() {
     checkAiProviderReachable("groq", "https://api.groq.com/openai/v1", [401, 403, 404]),
     checkAiProviderReachable("openrouter", "https://openrouter.ai/api/v1", [401, 403, 404]),
     checkAiProviderReachable("nvidia", "https://integrate.api.nvidia.com/v1", [401, 403, 404]),
-    checkAiProviderReachable("huggingface", "https://api-inference.huggingface.co", [401, 403, 404]),
+    checkAiProviderReachable("huggingface", "https://huggingface.co/api/whoami-v2", [401, 403, 404]),
 
     // Vercel Blob quota
     timedCheck("vercel_blob", async () => {
