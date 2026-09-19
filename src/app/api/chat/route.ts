@@ -257,9 +257,10 @@ export async function POST(req: NextRequest) {
   }
 
   // RAG step 1: retrieve top-k relevant knowledge chunks
+  const query = lastUser.content;
   let chunks: KnowledgeChunk[] = [];
   try {
-    chunks = searchKnowledgeBase(lastUser.content, 8);
+    chunks = searchKnowledgeBase(query, 8);
   } catch (e) {
     // Retrieval failures should not block the chat — fall back to no context.
     console.error("[chat] knowledge-base retrieval failed:", e);
@@ -270,7 +271,7 @@ export async function POST(req: NextRequest) {
   const systemPrompt = buildSystemPrompt(chunks);
 
   // RAG step 3: call the LLM
-  let replyText: string;
+  let replyText = "";
   const model = "glm-4-plus";
   let llmOk = false;
   let llmError: string | null = null;
