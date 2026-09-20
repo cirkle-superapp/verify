@@ -12,6 +12,8 @@ import { ScoreBadge } from "@/components/verify/score-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { enhanceImage } from "@/lib/image-enhance";
 import { toast } from "sonner";
+import { OcrFeedback } from "@/components/verify/ocr-feedback";
+import { useI18n } from "@/components/i18n/use-i18n";
 
 function FieldRow({
   icon: Icon,
@@ -57,6 +59,8 @@ export function DocReviewStep() {
   const meta = DOC_TYPES.find((d) => d.id === docType)!;
   const extracted = docExtracted;
   const [enhancing, setEnhancing] = useState(false);
+  const [ocrFeedbackActive, setOcrFeedbackActive] = useState(false);
+  const { t } = useI18n();
 
   const extraEntries = useMemo(() => {
     if (!extracted?.extraFields) return [];
@@ -89,6 +93,7 @@ export function DocReviewStep() {
     if (!docFront) return;
     setEnhancing(true);
     setDocLoading(true);
+    setOcrFeedbackActive(true);
     try {
       const enhanced = await enhanceImage(docFront, { contrast: 25, sharpness: 45, autoContrast: true });
       setDocFront(enhanced);
@@ -107,7 +112,20 @@ export function DocReviewStep() {
     } finally {
       setEnhancing(false);
       setDocLoading(false);
+      // OCR feedback continues until the simulated pipeline finishes — keep it active
+      // so the user sees the green checkmarks march to completion.
     }
+  };
+
+  const handleOcrComplete = () => {
+    setOcrFeedbackActive(false);
+  };
+
+  const handleOcrCancel = () => {
+    setOcrFeedbackActive(false);
+    setEnhancing(false);
+    setDocLoading(false);
+    toast.info(t("ocr.feedback.cancelled"));
   };
 
   // Allow continuing as long as we have a document image — face match uses the image, not the text.
@@ -116,9 +134,18 @@ export function DocReviewStep() {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">Review extracted data</h2>
+        <h2 className="text-2xl font-bold">{t("wizard.doc_review.reviewDetails")}</h2>
         <p className="text-muted-foreground" dir="rtl" lang="ar">راجع البيانات المستخرجة</p>
       </div>
+
+      {/* Real-time OCR feedback — visible while re-extraction runs */}
+      {ocrFeedbackActive && (
+        <OcrFeedback
+          active={ocrFeedbackActive}
+          onCancel={handleOcrCancel}
+          onComplete={handleOcrComplete}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm">
@@ -153,7 +180,7 @@ export function DocReviewStep() {
           )}
           <Button variant="outline" size="sm" onClick={reEnhanceAndReExtract} disabled={enhancing}>
             {enhancing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1" />}
-            Enhance & re-extract
+            {t("wizard.doc_review.enhanceReExtract")}
           </Button>
         </div>
       </div>
@@ -324,14 +351,14 @@ export function DocReviewStep() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="outline" onClick={retake}>
-          <RotateCcw className="h-4 w-4 mr-2" /> Retake photos
+          <RotateCcw className="h-4 w-4 mr-2" /> {t("wizard.doc_review.retakePhotos")}
         </Button>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setStep("doc_capture")}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+            <ArrowLeft className="h-4 w-4 mr-1" /> {t("common.back")}
           </Button>
           <Button onClick={goNext} disabled={!canContinue}>
-            Continue to selfie <ArrowRight className="h-4 w-4 ml-1" />
+            {t("common.continue")} <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database, Users, Activity } from "lucide-react";
+import { CheckCircle2, XCircle, ShieldCheck, RotateCcw, History, Loader2, FileText, Save, AlertTriangle, Database, Users, Activity, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,6 +11,8 @@ import { ScoreBadge, StatusBadge } from "@/components/verify/score-badge";
 import { ConsensusBadge } from "@/components/verify/consensus-badge";
 import { DOC_TYPES } from "@/lib/verification-types";
 import { toast } from "sonner";
+import { useI18n } from "@/components/i18n/use-i18n";
+import { VerificationReportModal } from "@/components/verify/verification-report";
 
 export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
   const {
@@ -34,6 +36,8 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
   } = useVerificationStore();
   const meta = DOC_TYPES.find((d) => d.id === docType)!;
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const { t } = useI18n();
 
   const docScore = Math.round((docExtracted?.confidence ?? 0) * 100);
   const faceScore = Math.round(faceMatch?.similarity ?? 0);
@@ -101,7 +105,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
           )}
         </div>
         <h1 className="text-3xl font-bold">
-          {passed ? "Identity Verified" : "Verification Failed"}
+          {passed ? t("wizard.result.verified") : t("wizard.result.rejected")}
         </h1>
         <p className="text-muted-foreground" dir="rtl" lang="ar">
           {passed ? "تم التحقق من الهوية بنجاح" : "فشل التحقق من الهوية"}
@@ -110,17 +114,17 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
         <div className="flex justify-center">
           {saving && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving to database…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("wizard.result.savingToDatabase")}
             </span>
           )}
           {saved && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
-              <Database className="h-3.5 w-3.5" /> Saved · ID {recordId?.slice(-8)}
+              <Database className="h-3.5 w-3.5" /> {t("wizard.result.savedId", { id: recordId?.slice(-8) ?? "" })}
             </span>
           )}
           {saveFailed && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
-              <AlertTriangle className="h-3.5 w-3.5" /> Not saved
+              <AlertTriangle className="h-3.5 w-3.5" /> {t("wizard.result.notSaved")}
             </span>
           )}
         </div>
@@ -130,11 +134,11 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
       {saveFailed && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Record not saved</AlertTitle>
+          <AlertTitle>{t("wizard.result.recordNotSavedTitle")}</AlertTitle>
           <AlertDescription className="space-y-2">
-            <p>The verification completed but the record could not be saved to the database: {saveError}</p>
+            <p>{t("wizard.result.recordNotSavedBody", { error: saveError ?? "" })}</p>
             <Button size="sm" onClick={saveRecord}>
-              <Save className="h-4 w-4 mr-1" /> Retry save
+              <Save className="h-4 w-4 mr-1" /> {t("common.retry")} {t("common.save").toLowerCase()}
             </Button>
           </AlertDescription>
         </Alert>
@@ -145,7 +149,7 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-sm text-muted-foreground">Overall verification score</div>
+              <div className="text-sm text-muted-foreground">{t("wizard.result.score")}</div>
               <div className="text-3xl font-bold">{overall}%</div>
             </div>
             <ShieldCheck className={`h-10 w-10 ${passed ? "text-teal-600" : "text-rose-500"}`} />
@@ -302,25 +306,35 @@ export function ResultStep({ onViewHistory }: { onViewHistory: () => void }) {
       <div className="flex flex-wrap items-center justify-center gap-3">
         {saving && (
           <Button disabled>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving record…
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t("wizard.result.savingToDatabase")}
           </Button>
         )}
         {saveFailed && (
           <Button onClick={saveRecord}>
-            <Save className="h-4 w-4 mr-2" /> Retry save
+            <Save className="h-4 w-4 mr-2" /> {t("common.retry")} {t("common.save").toLowerCase()}
           </Button>
         )}
         {saved && (
           <>
             <Button onClick={reset} size="lg">
-              <RotateCcw className="h-4 w-4 mr-2" /> New verification
+              <RotateCcw className="h-4 w-4 mr-2" /> {t("wizard.result.startNew")}
+            </Button>
+            <Button variant="outline" onClick={() => setReportOpen(true)}>
+              <Download className="h-4 w-4 mr-2" /> {t("wizard.result.downloadReport")}
             </Button>
             <Button variant="outline" onClick={onViewHistory}>
-              <History className="h-4 w-4 mr-2" /> View history
+              <History className="h-4 w-4 mr-2" /> {t("wizard.result.viewHistory")}
             </Button>
           </>
         )}
       </div>
+
+      {/* Verification report (PDF) modal */}
+      <VerificationReportModal
+        verificationId={recordId}
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+      />
     </div>
   );
 }

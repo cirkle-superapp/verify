@@ -20,6 +20,8 @@ import { SpecsBrowser } from "@/components/verify/specs-browser";
 import { InfraDashboard } from "@/components/verify/infra-dashboard";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 import { ChatWidget } from "@/components/chatbot/chat-widget";
+import { LocaleToggle } from "@/components/i18n/locale-toggle";
+import { useI18n } from "@/components/i18n/use-i18n";
 
 type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra";
 
@@ -28,6 +30,7 @@ export default function Home() {
   const setStep = useVerificationStore((s) => s.setStep);
   const reset = useVerificationStore((s) => s.reset);
   const [view, setView] = useState<View>("wizard");
+  const { t } = useI18n();
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-muted/40 via-background to-background">
@@ -47,12 +50,13 @@ export default function Home() {
           </button>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
-            <NavButton active={view === "wizard"} onClick={() => setView("wizard")} icon={HomeIcon} label="Verify" />
-            <NavButton active={view === "history"} onClick={() => setView("history")} icon={History} label="History" />
-            <NavButton active={view === "training"} onClick={() => setView("training")} icon={Database} label="Training" />
-            <NavButton active={view === "specs"} onClick={() => setView("specs")} icon={Globe} label="Specs" />
-            <NavButton active={view === "infra"} onClick={() => setView("infra")} icon={Gauge} label="Infra" />
-            <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label="Lab" />
+            <NavButton active={view === "wizard"} onClick={() => setView("wizard")} icon={HomeIcon} label={t("nav.verify")} />
+            <NavButton active={view === "history"} onClick={() => setView("history")} icon={History} label={t("nav.history")} />
+            <NavButton active={view === "training"} onClick={() => setView("training")} icon={Database} label={t("nav.training")} />
+            <NavButton active={view === "specs"} onClick={() => setView("specs")} icon={Globe} label={t("nav.specs")} />
+            <NavButton active={view === "infra"} onClick={() => setView("infra")} icon={Gauge} label={t("nav.infra")} />
+            <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label={t("nav.lab")} />
+            <LocaleToggle />
           </div>
         </div>
       </header>
@@ -97,14 +101,14 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <CirkleLogo size={18} animated={false} />
-            <span>Cirkle Identity Verification</span>
+            <span>{t("footer.tagline")}</span>
             <span className="hidden sm:inline">·</span>
             <span className="hidden sm:inline font-arabic" dir="rtl" lang="ar">دواير للتحقق من الهوية</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>Zero-cost · Self-hosted · Privacy-first</span>
+            <span>{t("footer.zeroCost")}</span>
             <span className="hidden md:inline">·</span>
-            <span className="hidden md:inline">Egyptian ID · Passport · License</span>
+            <span className="hidden md:inline">{t("footer.egyptianId")}</span>
           </div>
         </div>
       </footer>
