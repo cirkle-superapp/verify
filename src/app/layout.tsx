@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Cairo } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { I18nProvider } from "@/components/i18n/i18n-provider";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,14 +28,31 @@ export const metadata: Metadata = {
     "Cirkle (دواير) — AI-powered live identity verification: read Egyptian and Arabic documents, capture a live selfie, and prove liveness with movement challenges. Zero-cost, self-hosted.",
   keywords: ["Cirkle", "دواير", "identity verification", "KYC", "Egyptian ID", "Arabic OCR", "liveness", "face match", "VLM"],
   authors: [{ name: "Cirkle" }],
+  manifest: "/manifest.json",
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Cirkle",
   },
   openGraph: {
     title: "Cirkle Identity Verification",
     description: "Cirkle (دواير) — Read Egyptian/Arabic documents, match faces, and verify liveness. Zero-cost, self-hosted.",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1a6b3a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -50,6 +68,7 @@ export default function RootLayout({
         <I18nProvider>
           {children}
         </I18nProvider>
+        <ServiceWorkerRegistrar />
         <Toaster />
         <SonnerToaster richColors position="top-center" />
       </body>

@@ -57,6 +57,8 @@ export const en: Translations = {
   "nav.specs": "Specs",
   "nav.infra": "Infra",
   "nav.lab": "Lab",
+  "nav.apiDocs": "API Docs",
+  "nav.apiDocsDesc": "Swagger UI — explore all 50+ endpoints live",
 
   // ─── Common ────────────────────────────────────────────────────────
   "common.next": "Next",
@@ -242,6 +244,8 @@ export const ar: Translations = {
   "nav.specs": "المواصفات",
   "nav.infra": "البنية",
   "nav.lab": "المعمل",
+  "nav.apiDocs": "وثائق الـ API",
+  "nav.apiDocsDesc": "Swagger UI — استكشف جميع الـ 50+ نقاط النهاية مباشرة",
 
   // ─── Common ────────────────────────────────────────────────────────
   "common.next": "التالي",

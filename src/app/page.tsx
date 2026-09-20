@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -18,12 +18,15 @@ import { EvaluationLab } from "@/components/verify/evaluation-lab";
 import { TrainingData } from "@/components/verify/training-data";
 import { SpecsBrowser } from "@/components/verify/specs-browser";
 import { InfraDashboard } from "@/components/verify/infra-dashboard";
+import { RealtimeDashboard } from "@/components/verify/realtime-dashboard";
+import { ApiDocsModal } from "@/components/verify/api-docs-modal";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 import { ChatWidget } from "@/components/chatbot/chat-widget";
 import { LocaleToggle } from "@/components/i18n/locale-toggle";
 import { useI18n } from "@/components/i18n/use-i18n";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
 
-type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra";
+type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
@@ -55,7 +58,9 @@ export default function Home() {
             <NavButton active={view === "training"} onClick={() => setView("training")} icon={Database} label={t("nav.training")} />
             <NavButton active={view === "specs"} onClick={() => setView("specs")} icon={Globe} label={t("nav.specs")} />
             <NavButton active={view === "infra"} onClick={() => setView("infra")} icon={Gauge} label={t("nav.infra")} />
+            <NavButton active={view === "live"} onClick={() => setView("live")} icon={Radio} label="Live" />
             <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label={t("nav.lab")} />
+            <ApiDocsModal />
             <LocaleToggle />
           </div>
         </div>
@@ -71,6 +76,8 @@ export default function Home() {
           <SpecsBrowser onBack={() => setView("wizard")} />
         ) : view === "infra" ? (
           <InfraDashboard onBack={() => setView("wizard")} />
+        ) : view === "live" ? (
+          <RealtimeDashboard onBack={() => setView("wizard")} />
         ) : view === "eval" ? (
           <EvaluationLab onBack={() => setView("wizard")} />
         ) : (
@@ -115,6 +122,9 @@ export default function Home() {
 
       {/* Floating chatbot assistant — RAG-powered, answers KYC / MRZ / liveness questions */}
       <ChatWidget />
+
+      {/* PWA install prompt — only visible when the browser fires beforeinstallprompt */}
+      <InstallPrompt />
     </div>
   );
 }
