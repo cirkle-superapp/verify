@@ -21,9 +21,13 @@ interface DbConfig {
 }
 
 function getTursoClient(): TursoHttpClient | null {
-  const url = process.env.DATABASE_URL;
+  // Prefer TURSO_DATABASE_URL (only set in .env.local, always Turso)
+  // over DATABASE_URL (may be overridden by .env to a SQLite file path).
+  const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
   if (!url || !url.startsWith("libsql:")) return null;
-  return new TursoHttpClient({ url, authToken: process.env.DATABASE_AUTH_TOKEN });
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.DATABASE_AUTH_TOKEN;
+  if (!authToken) return null;
+  return new TursoHttpClient({ url, authToken });
 }
 
 // Generate a CUID-like ID

@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected";
+type ConnectionStatus = "connecting" | "connected" | "disconnected" | "polling";
 
 interface HarmonyData {
   score: number;
@@ -166,6 +166,7 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempt = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleFrame = useCallback((frame: BroadcastFrame) => {
     switch (frame.type) {
@@ -211,24 +212,42 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
     };
     connectRef.current = () => {
       setStatus("connecting");
-      // Pick the URL — in dev, use localhost via Caddy with XTransformPort=3033.
-      // In prod, use the same-origin path with the port forward.
+      // Pick the URL — in dev (localhost:3000), Caddy runs on port 81.
+      // In prod (vercel.app), Caddy isn't available so we fall back to REST polling.
+      const isDev = typeof window !== "undefined" && window.location.hostname === "localhost";
       const proto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
       const host = typeof window !== "undefined" ? window.location.host : "localhost:3000";
-      const url = `${proto}://${host}/?XTransformPort=3033`;
+
+      // In dev, connect to Caddy on port 81 which forwards to the monitoring service.
+      // In prod, try same-origin (works only if Caddy is in front of Vercel — otherwise falls back to polling).
+      const wsHost = isDev ? "localhost:81" : host;
+      const url = `${proto}://${wsHost}/?XTransformPort=3033`;
       let ws: WebSocket;
       try {
         ws = new WebSocket(url);
       } catch {
-        // Failed construction — schedule a retry
-        scheduleReconnectRef.current();
+        // Failed construction — fall back to REST polling
+        startPollingFallback();
         return;
       }
       wsRef.current = ws;
 
+      // If WebSocket fails to connect within 3s, fall back to REST polling.
+      const fallbackTimer = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          try { ws.close(); } catch { /* ignore */ }
+          startPollingFallback();
+        }
+      }, 3000);
+
       ws.onopen = () => {
+        clearTimeout(fallbackTimer);
         reconnectAttempt.current = 0;
         setStatus("connected");
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
       };
       ws.onmessage = (ev) => {
         try {
@@ -239,12 +258,53 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
         }
       };
       ws.onclose = () => {
+        clearTimeout(fallbackTimer);
         setStatus("disconnected");
-        scheduleReconnectRef.current();
+        // Don't immediately retry WebSocket — switch to polling fallback
+        startPollingFallback();
       };
       ws.onerror = () => {
         // close handler will fire next; no-op here
       };
+    };
+
+    // REST API polling fallback — used when WebSocket is not available
+    // (e.g., on Vercel production where there's no Caddy to forward the WS).
+    const startPollingFallback = () => {
+      if (pollingIntervalRef.current) return; // already polling
+      setStatus("polling");
+      const poll = async () => {
+        try {
+          const base = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+          const [healthRes, harmonyRes, deepRes] = await Promise.all([
+            fetch(`${base}/api/health`).then(r => r.json()).catch(() => null),
+            fetch(`${base}/api/platform/harmony`).then(r => r.json()).catch(() => null),
+            fetch(`${base}/api/v1/verify/health/deep`).then(r => r.json()).catch(() => null),
+          ]);
+          if (harmonyRes) {
+            handleFrame({ type: "harmony", timestamp: new Date().toISOString(), data: harmonyRes.harmony });
+          }
+          // Merge deep health (has components) with basic health (has checks.database)
+          if (deepRes && deepRes.components) {
+            handleFrame({
+              type: "health",
+              timestamp: new Date().toISOString(),
+              data: {
+                overall: deepRes.overall || healthRes?.status || "unknown",
+                components: deepRes.components,
+                platforms: harmonyRes?.platforms,
+                checks: healthRes?.checks,
+              },
+            });
+          } else if (healthRes) {
+            handleFrame({ type: "health", timestamp: new Date().toISOString(), data: healthRes });
+          }
+        } catch {
+          // Ignore polling errors — will retry next interval
+        }
+      };
+      poll(); // immediate first poll
+      pollingIntervalRef.current = setInterval(poll, 5000);
     };
   });
 
@@ -252,6 +312,7 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
     connect();
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
@@ -273,19 +334,19 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
             aria-hidden
           >
             <span
-              className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${status === "connected" ? "animate-ping bg-emerald-500" : status === "connecting" ? "bg-yellow-500" : "bg-red-500"}`}
+              className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${status === "connected" ? "animate-ping bg-emerald-500" : status === "connecting" ? "bg-yellow-500" : status === "polling" ? "bg-blue-500" : "bg-red-500"}`}
             />
             <span
-              className={`relative inline-flex h-2.5 w-2.5 rounded-full ${status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-yellow-500" : "bg-red-500"}`}
+              className={`relative inline-flex h-2.5 w-2.5 rounded-full ${status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-yellow-500" : status === "polling" ? "bg-blue-500" : "bg-red-500"}`}
             />
           </div>
           <h2 className="text-lg sm:text-xl font-semibold">Live Dashboard</h2>
           <Badge variant="outline" className="text-xs font-normal">
-            {status}
+            {status === "polling" ? "REST polling" : status}
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {status === "disconnected" && (
+          {(status === "disconnected" || status === "polling") && (
             <Button size="sm" variant="outline" onClick={connect}>
               Reconnect
             </Button>
@@ -378,7 +439,7 @@ export function RealtimeDashboard({ onBack }: { onBack?: () => void }) {
           <CardTitle className="text-sm font-medium text-muted-foreground">Platform Components</CardTitle>
         </CardHeader>
         <CardContent>
-          {!health ? (
+          {!health || !health.components ? (
             <p className="text-sm text-muted-foreground">waiting for first health snapshot…</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
