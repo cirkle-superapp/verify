@@ -2526,7 +2526,17 @@ def write_metadata(name: str, ds: dict, dest_dir: Path, downloaded: bool,
 # ============================================================================
 
 def write_master_index(downloaded_set: set = None):
-    """Write DATASET_INDEX.json at project root listing all datasets + status."""
+    """Write DATASET_INDEX.json at project root listing all datasets + status.
+
+    The index now also scans ``data/datasets/`` for any subdirectory that
+    contains a ``metadata.json`` with ``downloaded: true`` but isn't part of
+    the 92-entry catalog (e.g. the 5 Cirkle synthetic datasets +
+    ``mnist`` / ``fashion_mnist`` / ``cifar10`` / ``face_api_spec``
+    pulled by ``training/download_reachable.py``). Those are surfaced in a
+    separate ``extra_local`` array + ``downloaded_local_count`` field so the
+    catalog count stays at 92 while the local-presence count reflects
+    reality.
+    """
     if downloaded_set is None:
         downloaded_set = set()
     by_category = {
@@ -2551,17 +2561,103 @@ def write_master_index(downloaded_set: set = None):
         }
         entries.append(entry)
         by_category.setdefault(cat, []).append(name)
+
+    # ── Scan for *extra* local datasets (subdirectories of data/datasets/ that
+    #    aren't in the DATASETS catalog but have a metadata.json marking them
+    #    downloaded). This captures the Cirkle synthetic bundles + any small
+    #    public datasets pulled by download_reachable.py.
+    extra_local = []
+    catalog_ids = set(DATASETS.keys())
+    if DATA_DIR.exists():
+        for sub in sorted(DATA_DIR.iterdir()):
+            if not sub.is_dir():
+                continue
+            if sub.name in catalog_ids:
+                continue
+            meta_path = sub / "metadata.json"
+            if not meta_path.exists():
+                continue
+            try:
+                with open(meta_path) as f:
+                    m = json.load(f)
+                if not m.get("downloaded"):
+                    continue
+                extra_local.append({
+                    "id": sub.name,
+                    "long_name": m.get("long_name", sub.name),
+                    "category": m.get("category", "extra_local"),
+                    "size_bytes": m.get("size_bytes", 0),
+                    "size_mb": round((m.get("size_bytes", 0) or 0) / (1024 * 1024), 3),
+                    "purpose": m.get("purpose", ""),
+                    "output": m.get("output", f"{sub.name}/"),
+                    "download_status": "downloaded",
+                    "in_catalog": False,
+                })
+            except Exception:
+                pass
+
+    # ── Also surface the synthetic bundles under data/datasets/synthetic/
+    #    (Cirkle-generated, public domain). These are JSON files written by
+    #    synthetic_generator.py — each is a self-contained dataset.
+    synth_dir = DATA_DIR / "synthetic"
+    if synth_dir.exists():
+        for jf in sorted(synth_dir.glob("*.json")):
+            # Read the first record to estimate size
+            try:
+                size_bytes = jf.stat().st_size
+                # Count records quickly by streaming JSON
+                with open(jf) as f:
+                    head = f.read(2048)
+                # crude record count: count occurrences of '"id":'
+                # (re-reading the whole file would be expensive for 50K records)
+                n_records = None
+                try:
+                    with open(jf) as f:
+                        data = json.load(f)
+                    n_records = len(data) if isinstance(data, list) else None
+                except Exception:
+                    pass
+                extra_local.append({
+                    "id": jf.stem,
+                    "long_name": f"Cirkle synthetic — {jf.stem}",
+                    "category": "synthetic_local",
+                    "size_bytes": size_bytes,
+                    "size_mb": round(size_bytes / (1024 * 1024), 3),
+                    "purpose": "Cirkle-generated synthetic training corpus (public domain)",
+                    "output": f"synthetic/{jf.name}",
+                    "download_status": "downloaded",
+                    "in_catalog": False,
+                    "record_count": n_records,
+                })
+            except Exception as e:
+                print(f"  warn: could not stat synthetic/{jf.name}: {e}")
+
+    # ── mrz_synth is in the catalog AND has its own data dir; make sure
+    #    the local record_count is reflected.
+    downloaded_local_count = (
+        sum(1 for e in entries if e["download_status"] == "downloaded")
+        + len(extra_local)
+    )
+
     index = {
-        "version": "1.0",
+        "version": "1.1",
         "generated_at": _now_iso(),
         "total_datasets": len(DATASETS),
         "categories": {cat: len(ids) for cat, ids in by_category.items()},
         "datasets": entries,
+        "extra_local_datasets": extra_local,
+        "extra_local_count": len(extra_local),
+        "downloaded_local_count": downloaded_local_count,
     }
     DATASET_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(DATASET_INDEX_PATH, 'w') as f:
         json.dump(index, f, indent=2, ensure_ascii=False)
-    print(f"\nMaster index written: {DATASET_INDEX_PATH} ({len(DATASETS)} datasets)")
+    n_cat_dl = sum(1 for e in entries if e["download_status"] == "downloaded")
+    print(f"\nMaster index written: {DATASET_INDEX_PATH}")
+    print(f"  cataloged datasets : {len(DATASETS)}")
+    print(f"  cataloged+downloaded: {n_cat_dl}")
+    print(f"  extra local datasets: {len(extra_local)}")
+    print(f"  total local presence: {downloaded_local_count}")
 
 
 # ============================================================================
