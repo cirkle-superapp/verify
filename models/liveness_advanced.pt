@@ -1,0 +1,39 @@
+{
+  "kind": "numpy_logistic_regression",
+  "weights_shape": [
+    12
+  ],
+  "bias_shape": [],
+  "meta": {
+    "feature_keys": [
+      "texture_variance",
+      "halftone_spacing_px",
+      "moire_frequency_hz",
+      "color_hist_anomaly",
+      "frequency_peak_count",
+      "depth_micro_relief_ratio",
+      "boundary_discontinuity",
+      "fft_spike_intensity",
+      "l2_norm",
+      "linf_norm",
+      "spectral_entropy",
+      "ridge_uniformity"
+    ],
+    "metrics": {
+      "accuracy": 0.8805,
+      "precision": 0.8785,
+      "recall": 0.8846,
+      "f1": 0.8816,
+      "apcer": 0.1237,
+      "bpcer": 0.1154,
+      "acer": 0.1195,
+      "confusion": {
+        "tp": 1779,
+        "tn": 1743,
+        "fp": 246,
+        "fn": 232
+      }
+    }
+  },
+  "note": "Real torch .pt would replace this when torch is available. Run `pip install torch` to enable the PyTorch path."
+}

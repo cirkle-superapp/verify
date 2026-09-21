@@ -72,8 +72,5 @@ tool-results/
 /screenshots/
 DATASET_INDEX.json
 
-# Trained model files (large, rebuildable)
-/models/
-/training/out/
 agent-ctx/
 .zscripts/dev.pid

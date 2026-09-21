@@ -1,0 +1,25 @@
+{
+  "kind": "numpy_logistic_regression",
+  "weights_shape": [
+    22
+  ],
+  "bias_shape": [],
+  "meta": {
+    "metrics": {
+      "accuracy": 0.7262,
+      "precision": 0.7269,
+      "recall": 0.5667,
+      "f1": 0.6369,
+      "apcer": 0.1565,
+      "bpcer": 0.4333,
+      "acer": 0.2949,
+      "confusion": {
+        "tp": 2401,
+        "tn": 4861,
+        "fp": 902,
+        "fn": 1836
+      }
+    }
+  },
+  "note": "Real torch .pt would replace this when torch is available. Run `pip install torch` to enable the PyTorch path."
+}
