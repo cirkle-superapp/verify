@@ -52,10 +52,20 @@ export function assertRange(
   min: number,
   max: number,
   label: string,
+  /** Optional extra details value (e.g. the full result object) included
+   *  in the error message on failure. Backwards-compatible — existing
+   *  4-arg callers continue to work unchanged. */
+  details?: unknown,
 ): void {
   if (value < min || value > max) {
+    const detail =
+      details === undefined
+        ? ""
+        : typeof details === "string"
+          ? `\n  got: ${details}`
+          : `\n  got: ${JSON.stringify(details)}`;
     throw new Error(
-      `${label}: expected ${value} to be in [${min}, ${max}]`,
+      `${label}: expected ${value} to be in [${min}, ${max}]${detail}`,
     );
   }
 }

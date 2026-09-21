@@ -1,19 +1,27 @@
 /**
  * Cirkle test runner — entry point for `bun run tests/run.ts`.
  *
- * Runs all six test files, collects results, prints a per-file
+ * Runs all twelve test files, collects results, prints a per-file
  * summary + grand total, and exits 0 on all-pass, 1 on any-fail.
  *
  * For HTTP-based tests (health + endpoints), the runner spawns a
  * Next.js dev server as a child process if one isn't already up on
  * http://localhost:3000. Pure module tests (knowledge-base,
- * validators, mrz-parser, chatbot) don't need the server.
+ * validators, mrz-parser, chatbot, chatbot-fallback, identity-graph,
+ * bias-detection, adversarial-detection, multimodal-fusion,
+ * continuous-auth) don't need the server.
  */
 
 import { run as knowledgeBaseTests } from "./knowledge-base.test";
 import { run as validatorTests } from "./validators.test";
 import { run as mrzParserTests } from "./mrz-parser.test";
 import { run as chatbotTests } from "./chatbot.test";
+import { run as chatbotFallbackTests } from "./chatbot-fallback.test";
+import { run as identityGraphTests } from "./identity-graph.test";
+import { run as biasDetectionTests } from "./bias-detection.test";
+import { run as adversarialDetectionTests } from "./adversarial-detection.test";
+import { run as multimodalFusionTests } from "./multimodal-fusion.test";
+import { run as continuousAuthTests } from "./continuous-auth.test";
 import { run as healthTests } from "./health.test";
 import { run as endpointTests } from "./endpoints.test";
 import { ensureServerRunning, stopSpawnedServer, BASE_URL } from "./lib/server";
@@ -24,6 +32,12 @@ const FILES: Array<{ name: string; run: () => Promise<TestResult[]> }> = [
   { name: "validators.test.ts", run: validatorTests },
   { name: "mrz-parser.test.ts", run: mrzParserTests },
   { name: "chatbot.test.ts", run: chatbotTests },
+  { name: "chatbot-fallback.test.ts", run: chatbotFallbackTests },
+  { name: "identity-graph.test.ts", run: identityGraphTests },
+  { name: "bias-detection.test.ts", run: biasDetectionTests },
+  { name: "adversarial-detection.test.ts", run: adversarialDetectionTests },
+  { name: "multimodal-fusion.test.ts", run: multimodalFusionTests },
+  { name: "continuous-auth.test.ts", run: continuousAuthTests },
   { name: "health.test.ts", run: healthTests },
   { name: "endpoints.test.ts", run: endpointTests },
 ];
@@ -39,7 +53,7 @@ async function main() {
 
   // ─── Pure module tests (no server needed) ─────────────────────
   const moduleResults: Array<{ file: string; results: TestResult[] }> = [];
-  for (const f of FILES.slice(0, 4)) {
+  for (const f of FILES.slice(0, 10)) {
     console.log(`\n── ${f.name} ─────────────────────────────────────────────`);
     const results = await f.run();
     moduleResults.push({ file: f.name, results });
@@ -65,7 +79,7 @@ async function main() {
   }
 
   const httpResults: Array<{ file: string; results: TestResult[] }> = [];
-  for (const f of FILES.slice(4)) {
+  for (const f of FILES.slice(10)) {
     console.log(`\n── ${f.name} ─────────────────────────────────────────────`);
     let results: TestResult[];
     try {

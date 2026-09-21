@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, ArrowLeft, User, Hash, MapPin, Calendar, Briefcase, Heart, RotateCcw, FileText, ImageIcon, ShieldCheck, AlertTriangle, CheckCircle2, Wand2, Loader2, Globe } from "lucide-react";
+import { ArrowRight, ArrowLeft, User, Hash, MapPin, Calendar, Briefcase, Heart, RotateCcw, FileText, ImageIcon, ShieldCheck, AlertTriangle, CheckCircle2, Wand2, Loader2, Globe, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,6 +14,8 @@ import { enhanceImage } from "@/lib/image-enhance";
 import { toast } from "sonner";
 import { OcrFeedback } from "@/components/verify/ocr-feedback";
 import { useI18n } from "@/components/i18n/use-i18n";
+import { getTemplate } from "@/lib/document-templates";
+import { TemplateOverlay } from "@/components/verify/template-overlay";
 
 function FieldRow({
   icon: Icon,
@@ -130,6 +132,27 @@ export function DocReviewStep() {
 
   // Allow continuing as long as we have a document image — face match uses the image, not the text.
   const canContinue = !!docFront;
+
+  // ─── Visual template overlay ─────────────────────────────────────
+  // When we have a known country + doc type and an actual template exists
+  // in the catalog, show the TemplateOverlay below the image card so
+  // users can see if their document matches the expected layout.
+  const detectedCountry = (extracted?.extraFields?._detectedCountry as string | undefined) || "";
+  const documentTemplate = useMemo(() => {
+    if (!detectedCountry || !docType) return undefined;
+    try {
+      return getTemplate(detectedCountry, docType);
+    } catch {
+      return undefined;
+    }
+  }, [detectedCountry, docType]);
+
+  // Detected fields are not yet wired from the OCR pipeline to here
+  // (the doc-parser doesn't currently emit per-field bounding boxes).
+  // The overlay still shows the expected (green) template positions
+  // which is the primary visual aid. When this is wired, set
+  // hasDetectedFields=true and pass the array to the TemplateOverlay.
+  const hasDetectedFields = false;
 
   return (
     <div className="space-y-6">
@@ -347,6 +370,33 @@ export function DocReviewStep() {
             </pre>
           </CardContent>
         </Card>
+      )}
+
+      {/* Visual template overlay — shown when a known template exists
+          for the detected country + doc type. Lets the user see if
+          their uploaded document matches the expected layout (green
+          expected positions, yellow detected match, red mismatch). */}
+      {documentTemplate && docFront && (
+        <TemplateOverlay
+          imageDataUrl={docFront}
+          template={documentTemplate}
+          detectedFields={hasDetectedFields ? [] : undefined}
+        />
+      )}
+
+      {documentTemplate && docFront && (
+        <Alert className="border-teal-200 bg-teal-50/40">
+          <LayoutTemplate className="h-4 w-4 text-teal-700" />
+          <AlertTitle className="text-sm">Visual template overlay</AlertTitle>
+          <AlertDescription className="text-xs text-muted-foreground">
+            Showing the <strong>{documentTemplate.country}</strong>{" "}
+            <strong>{documentTemplate.docType.replace(/_/g, " ")}</strong> template.
+            Green rectangles = expected field positions from the {documentTemplate.fields.length}-field
+            reference layout. {hasDetectedFields
+              ? "Yellow = detected field matches expected position; red = mismatch."
+              : "Detected-field overlays are not yet wired from the OCR pipeline to this view — the green template positions are the primary visual aid."}
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">

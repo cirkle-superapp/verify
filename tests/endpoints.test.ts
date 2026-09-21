@@ -80,6 +80,7 @@ const ENDPOINTS: Array<{ method: "GET" | "POST"; path: string; tag: string }> = 
   { method: "POST", path: "/api/v1/verify/image-analysis", tag: "v1" },
   { method: "POST", path: "/api/v1/verify/image-enhance", tag: "v1" },
   { method: "GET", path: "/api/v1/verify/report", tag: "v1" },
+  { method: "POST", path: "/api/v1/verify/inference", tag: "v1" },
 
   // Chatbot
   { method: "POST", path: "/api/chat", tag: "chat" },
@@ -115,6 +116,7 @@ const VALID_BODIES: Record<string, any> = {
   "/api/v1/verify/risk-assessment": { fields: { score: "10" } },
   "/api/v1/verify/certificate": { fields: { id: "abc" } },
   "/api/v1/verify/webhook": { url: "https://example.com/hook", events: ["verification.completed"] },
+  "/api/v1/verify/inference": { model: "liveness_advanced", features: [0.1, 0.2, 0.3, 0.4] },
 };
 
 // Minimal API key for V1 endpoints that require one (only /api/v1/api-keys

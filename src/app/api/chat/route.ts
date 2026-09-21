@@ -6,6 +6,7 @@ import {
   getKnowledgeStats,
   type KnowledgeChunk,
 } from "@/lib/chatbot-knowledge-base";
+import { generateConversationalFallback } from "@/lib/chatbot-fallback";
 import { ensureZaiConfig } from "@/lib/zai-config";
 
 export const runtime = "nodejs";
@@ -123,45 +124,22 @@ function buildSystemPrompt(chunks: KnowledgeChunk[]): string {
  * This happens on Vercel production where the z-ai SDK's internal API
  * endpoint (internal-api.z.ai) is not reachable — it's only accessible
  * from the sandbox dev environment. When that happens, we still want
- * the chatbot to return useful information from the knowledge base
- * rather than just an error.
+ * the chatbot to return a useful, conversational answer from the
+ * knowledge base rather than just an error.
  *
- * Returns a markdown-formatted response that:
- * 1. Notes the LLM is in fallback mode
- * 2. Lists the top knowledge chunks directly
- * 3. Provides the chunk content so the user can read the actual specs
+ * Delegates to `generateConversationalFallback()` in
+ * `src/lib/chatbot-fallback.ts`, which:
+ *   1. Detects the query intent (security features, MRZ, liveness, etc.)
+ *   2. Opens with a natural-language intro
+ *   3. Formats the top chunk with intent-specific markdown (table / steps /
+ *      definition / algorithm)
+ *   4. Adds a "Related information" section with 2-3 truncated chunks
+ *   5. Closes with 3 follow-up question suggestions
+ *
+ * Returns a markdown-formatted response string.
  */
 function buildKnowledgeBaseFallback(query: string, chunks: KnowledgeChunk[]): string {
-  if (chunks.length === 0) {
-    return [
-      "> ⚠️ **Note:** The LLM service is currently in fallback mode (no direct access from this deployment).",
-      "",
-      `I couldn't find any knowledge base entries matching your query: _"${query.slice(0, 100)}"_.`,
-      "",
-      "Try asking about a specific country's document security features (e.g., 'What security features does the Egyptian national ID have?'),",
-      "MRZ validation, ID checksum validation, liveness detection, or face quality scoring.",
-    ].join("\n");
-  }
-
-  const topChunk = chunks[0];
-  const lines: string[] = [
-    "> ⚠️ **Fallback mode** — the LLM service is not directly reachable from this deployment.",
-    "> Returning the top knowledge-base matches for your query directly.",
-    "",
-    `## ${topChunk.title}`,
-    "",
-    topChunk.content,
-  ];
-
-  if (chunks.length > 1) {
-    lines.push("", "## Related Knowledge", "");
-    for (let i = 1; i < Math.min(chunks.length, 4); i++) {
-      const c = chunks[i];
-      lines.push(`### ${i + 1}. ${c.title}`, "", c.content.slice(0, 600) + (c.content.length > 600 ? "…" : ""), "");
-    }
-  }
-
-  return lines.join("\n");
+  return generateConversationalFallback(query, chunks);
 }
 
 // ─── OPTIONS (CORS preflight) ────────────────────────────────────────
