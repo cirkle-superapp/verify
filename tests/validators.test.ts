@@ -19,6 +19,27 @@ import {
   validateEgyptianId,
   validateSaudiId,
   validateNationalId,
+  validateVietnameseCccd,
+  validateBangladeshiId,
+  validateSriLankanId,
+  validateNepaliId,
+  validateAfghanId,
+  validateIranianId,
+  validateIraqiId,
+  validateLebaneseId,
+  validatePalestinianId,
+  validateSudaneseId,
+  validateLibyanId,
+  validateYemeniId,
+  validateBahrainiId,
+  validateKuwaitiId,
+  validateMoroccanId,
+  validateNigerianId,
+  validateCambodianId,
+  validateMauritianId,
+  validateAlgerianId,
+  validateTunisianId,
+  validateGhanaId,
 } from "@/lib/id-validators";
 import { runTest, assert, assertEqual } from "./lib/runner";
 
@@ -207,6 +228,262 @@ export async function run() {
     await runTest("validateNationalId: unknown country returns isValid=false", () => {
       const r = validateNationalId("XX", "123");
       assert(!r.isValid, "unknown country should return isValid=false");
+    }),
+
+    // ─── Vietnam CCCD ─────────────────────────────────────────────
+    await runTest("validateVietnameseCccd: valid checksum (001098000012)", () => {
+      const r = validateVietnameseCccd("001098000012");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "VN", "country");
+      assert(!!r.extractedFields?.birthDate, "should extract birthDate");
+      assert(!!r.extractedFields?.gender, "should extract gender");
+    }),
+
+    await runTest("validateVietnameseCccd: invalid checksum (001098000013)", () => {
+      const r = validateVietnameseCccd("001098000013");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    await runTest("validateVietnameseCccd: too short (123)", () => {
+      const r = validateVietnameseCccd("123");
+      assert(!r.isValid, "expected isValid=false");
+    }),
+
+    // ─── Bangladesh Smart NID (Luhn) ───────────────────────────────
+    await runTest("validateBangladeshiId: valid 10-digit Luhn (4242424242)", () => {
+      const r = validateBangladeshiId("4242424242");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "BD", "country");
+    }),
+
+    await runTest("validateBangladeshiId: invalid Luhn (4242424243)", () => {
+      const r = validateBangladeshiId("4242424243");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    await runTest("validateBangladeshiId: empty string fails", () => {
+      const r = validateBangladeshiId("");
+      assert(!r.isValid, "expected isValid=false");
+    }),
+
+    // ─── Sri Lanka NIC ─────────────────────────────────────────────
+    await runTest("validateSriLankanId: new 12-digit valid (198505010001)", () => {
+      const r = validateSriLankanId("198505010001");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "LK", "country");
+      assert(!!r.extractedFields?.birthDate, "should extract birthDate");
+    }),
+
+    await runTest("validateSriLankanId: new 12-digit invalid checksum", () => {
+      const r = validateSriLankanId("198505010002");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    await runTest("validateSriLankanId: old 9-digit + V format (850101001V)", () => {
+      const r = validateSriLankanId("850101001V");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true (old format)", r.reasoning);
+      assert(!!r.extractedFields?.birthDate, "should extract birthDate");
+    }),
+
+    // ─── Nepal Citizenship ID ──────────────────────────────────────
+    await runTest("validateNepaliId: valid mod-11 (12345678909)", () => {
+      const r = validateNepaliId("12345678909");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "NP", "country");
+    }),
+
+    await runTest("validateNepaliId: invalid checksum (12345678900)", () => {
+      const r = validateNepaliId("12345678900");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Afghan e-Tazkira ──────────────────────────────────────────
+    await runTest("validateAfghanId: valid mod-11 (1234567891)", () => {
+      const r = validateAfghanId("1234567891");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "AF", "country");
+    }),
+
+    await runTest("validateAfghanId: invalid checksum (1234567892)", () => {
+      const r = validateAfghanId("1234567892");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Iranian Melli Code (Rho algorithm) ───────────────────────
+    await runTest("validateIranianId: valid Rho (1234567891)", () => {
+      const r = validateIranianId("1234567891");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "IR", "country");
+    }),
+
+    await runTest("validateIranianId: all-same digits rejected (1111111111)", () => {
+      const r = validateIranianId("1111111111");
+      assert(!r.isValid, "expected isValid=false (all same digits)");
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    await runTest("validateIranianId: invalid checksum (1234567892)", () => {
+      const r = validateIranianId("1234567892");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Iraqi National ID ─────────────────────────────────────────
+    await runTest("validateIraqiId: valid mod-11 (123456789013)", () => {
+      const r = validateIraqiId("123456789013");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "IQ", "country");
+    }),
+
+    await runTest("validateIraqiId: invalid checksum (123456789012)", () => {
+      const r = validateIraqiId("123456789012");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Lebanese ID ───────────────────────────────────────────────
+    await runTest("validateLebaneseId: valid mod-11 (123456789012)", () => {
+      const r = validateLebaneseId("123456789012");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "LB", "country");
+    }),
+
+    await runTest("validateLebaneseId: invalid checksum (123456789013)", () => {
+      const r = validateLebaneseId("123456789013");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Palestine Hawiyya (Luhn variant) ─────────────────────────
+    await runTest("validatePalestinianId: valid Luhn variant (123456782)", () => {
+      const r = validatePalestinianId("123456782");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "PS", "country");
+    }),
+
+    await runTest("validatePalestinianId: invalid checksum (123456783)", () => {
+      const r = validatePalestinianId("123456783");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Sudan National ID ─────────────────────────────────────────
+    await runTest("validateSudaneseId: valid mod-11 (12345678909)", () => {
+      const r = validateSudaneseId("12345678909");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "SD", "country");
+    }),
+
+    await runTest("validateSudaneseId: invalid checksum (12345678900)", () => {
+      const r = validateSudaneseId("12345678900");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Libya National ID ─────────────────────────────────────────
+    await runTest("validateLibyanId: valid mod-11 (123456789013)", () => {
+      const r = validateLibyanId("123456789013");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "LY", "country");
+    }),
+
+    await runTest("validateLibyanId: invalid checksum (123456789012)", () => {
+      const r = validateLibyanId("123456789012");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Yemen ID ──────────────────────────────────────────────────
+    await runTest("validateYemeniId: valid mod-11 (1234567891)", () => {
+      const r = validateYemeniId("1234567891");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "YE", "country");
+    }),
+
+    await runTest("validateYemeniId: invalid checksum (1234567892)", () => {
+      const r = validateYemeniId("1234567892");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Bahrain CPR (Luhn) ───────────────────────────────────────
+    await runTest("validateBahrainiId: valid Luhn (424242428)", () => {
+      const r = validateBahrainiId("424242428");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "BH", "country");
+    }),
+
+    await runTest("validateBahrainiId: invalid Luhn (424242429)", () => {
+      const r = validateBahrainiId("424242429");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Tunisia CIN ──────────────────────────────────────────────
+    await runTest("validateTunisianId: valid mod-29 (12345675)", () => {
+      const r = validateTunisianId("12345675");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assert(r.checksumValid, "expected checksumValid=true", r.reasoning);
+      assertEqual(r.country, "TN", "country");
+    }),
+
+    await runTest("validateTunisianId: invalid checksum (12345676)", () => {
+      const r = validateTunisianId("12345676");
+      assert(r.isValid, "expected isValid=true (format valid)", r.reasoning);
+      assert(!r.checksumValid, "expected checksumValid=false");
+    }),
+
+    // ─── Cambodia ID (format only) ─────────────────────────────────
+    await runTest("validateCambodianId: valid 9-digit format (123456789)", () => {
+      const r = validateCambodianId("123456789");
+      assert(r.isValid, "expected isValid=true", r.reasoning);
+      assertEqual(r.country, "KH", "country");
+    }),
+
+    await runTest("validateCambodianId: wrong length (12345)", () => {
+      const r = validateCambodianId("12345");
+      assert(!r.isValid, "expected isValid=false (too short)");
+    }),
+
+    // ─── Dispatcher: new countries ─────────────────────────────────
+    await runTest("validateNationalId: dispatcher routes VN to Vietnamese validator", () => {
+      const r = validateNationalId("VN", "001098000012");
+      assertEqual(r.country, "VN", "country should be VN");
+      assert(r.isValid, "VN dispatcher should return isValid=true");
+      assert(r.checksumValid, "VN dispatcher should return checksumValid=true");
+    }),
+
+    await runTest("validateNationalId: dispatcher routes IR to Iranian validator", () => {
+      const r = validateNationalId("IR", "1234567891");
+      assertEqual(r.country, "IR", "country should be IR");
+      assert(r.isValid, "IR dispatcher should return isValid=true");
+      assert(r.checksumValid, "IR dispatcher should return checksumValid=true");
+    }),
+
+    await runTest("validateNationalId: dispatcher routes BD to Bangladeshi validator", () => {
+      const r = validateNationalId("BD", "4242424242");
+      assertEqual(r.country, "BD", "country should be BD");
+      assert(r.isValid, "BD dispatcher should return isValid=true");
+      assert(r.checksumValid, "BD dispatcher should return checksumValid=true");
     }),
   ];
 }

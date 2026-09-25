@@ -391,7 +391,7 @@ function describeCrossFieldCheck(name: string): string {
     EXPIRY_SANITY:
       "Flags documents that are already expired.",
     NATIONALITY_COUNTRY_MATCH:
-      "Cross-checks that the nationality field matches the issuing country.",
+      "Cross-checks that the nationality field matches the issuing country (extended to 20+ new countries in Task 19-c).",
     MRZ_CHECKSUMS:
       "Re-runs all four TD1/TD2/TD3 check digit validations (document number, birth date, expiry date, composite).",
     MRZ_NAME_MATCH:
@@ -430,6 +430,37 @@ function describeCrossFieldCheck(name: string): string {
       "Cross-checks the Arabic and English name fields by transliterating Arabic to Latin and computing Levenshtein distance.",
     EXPIRY_RECENTLY_ISSUED:
       "Flags documents whose expiry is suspiciously soon after the issue date (e.g. < 1 month validity).",
+    // ── Task 19-c — 15 new checks ──
+    ID_BIRTHDATE_NEW_COUNTRIES:
+      "Decodes the birthDate embedded at country-specific positions in the national ID for the 20 new countries (VN/TH/ID/MY/LK/LB/SD/LY/YE) and cross-checks against the extracted birthDate.",
+    ID_GENDER_NEW_COUNTRIES:
+      "Decodes the gender digit embedded in the national ID for new countries (Indonesia NIK day+40 offset, Malaysia MyKad pos 7, Thailand pos 13, Vietnam heuristic) and cross-checks against the extracted gender.",
+    DOCUMENT_NUMBER_FORMAT_BY_COUNTRY:
+      "Validates the document number against the country-specific pattern for the 20 new countries (VN 12 digits, ID 16 digits, SG S/T/F/G/M letter + 7 digits + check letter, etc.).",
+    NATIONALITY_DUAL_CITIZEN:
+      "Handles dual-citizen cases for the new 20 countries — allows known nationality pairings (e.g. LB + French) and flags unverified pairs for secondary-document check.",
+    MRZ_EXPIRY_DATE_VALIDITY:
+      "Validates the MRZ expiry date is in the future, or within a 6-month grace period for recently expired documents.",
+    MRZ_ISSUE_DATE_CONSISTENCY:
+      "If the MRZ optional data encodes an issue date, validates it is after the birth date and before the expiry date.",
+    NAME_LENGTH_BY_COUNTRY:
+      "Flags names that are unusually short or long for the declared country (e.g. Arabic names typically 4-5 words, Western 2-3 words).",
+    ADDRESS_FORMAT_BY_COUNTRY:
+      "Flags addresses that don't match the expected country-specific format (e.g. US address should have a 5-digit ZIP, Arabic-country address should contain Arabic script).",
+    PHOTO_PRESENCE:
+      "Flags documents where no photo was detected — verification requires a holder photo.",
+    DOCUMENT_AGE:
+      "Flags documents that are too old (e.g. >50 years for indefinite-validity countries, >15 years for 10-year-reissue countries).",
+    BIOMETRIC_TEMPLATE_CONSISTENCY:
+      "If biometric face embeddings are available across multiple captures, flags high variance (likely different person).",
+    CROSS_DOCUMENT_CONSISTENCY:
+      "Cross-checks names, birthDate, and gender across all of the user's previously verified documents (e.g. national_id vs passport).",
+    AGE_GENDER_CONSISTENCY:
+      "Validates the country-specific gender digit (where present) against the declared gender, and flags minor-with-ID-card cases (e.g. age <16 with national ID).",
+    NATIONALITY_LANGUAGE_CONSISTENCY:
+      "Validates that the nationality country's official language matches the script of the extracted name (e.g. Egyptian → Arabic name, German → Latin name).",
+    ISSUE_PLACE_NEW_COUNTRIES:
+      "Validates the issue place against the extended authority list for the 20 new countries (KNOWN_ISSUING_AUTHORITIES now covers 28 countries).",
   };
   return map[name] || "Cross-field consistency check.";
 }

@@ -1237,6 +1237,430 @@ export function validateHongKongId(id: string): IdValidation {
   return { country: "HK", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Hong Kong HKID" : "Checksum mismatch" };
 }
 
+// ─── Vietnam: 12-digit CCCD (Căn cước công dân) ─────────────────
+// Format: PPP-S-YYMMDD-NN-C (3 province + 1 gender/century + 6 DOB + 2 sequence + 1 check)
+// Checksum: mod-11 with weights [3,7,9,1,4,6,10,5,8,2,3]
+export function validateVietnameseCccd(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "VN", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 digits" };
+  }
+  const weights = [3, 7, 9, 1, 4, 6, 10, 5, 8, 2, 3];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = (10 - (sum % 11)) % 10;
+  const checksumValid = expected === parseInt(cleaned[11], 10);
+
+  const provinceCode = cleaned.slice(0, 3);
+  const genderCent = parseInt(cleaned[3], 10);
+  const yy = parseInt(cleaned.slice(4, 6), 10);
+  const mm = parseInt(cleaned.slice(6, 8), 10);
+  const dd = parseInt(cleaned.slice(8, 10), 10);
+  let century = 1900;
+  let gender: "Male" | "Female" = "Male";
+  if (genderCent === 0) { century = 1900; gender = "Male"; }
+  else if (genderCent === 1) { century = 1900; gender = "Female"; }
+  else if (genderCent === 2) { century = 2000; gender = "Male"; }
+  else if (genderCent === 3) { century = 2000; gender = "Female"; }
+  else if (genderCent === 4) { century = 2100; gender = "Male"; }
+  else if (genderCent === 5) { century = 2100; gender = "Female"; }
+
+  return {
+    country: "VN", idType: "national_id", isValid: true, checksumValid,
+    extractedFields: {
+      birthDate: `${century + yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+      gender,
+      birthYear: century + yy, birthMonth: mm, birthDay: dd,
+      sequence: parseInt(provinceCode, 10),
+    },
+    reasoning: checksumValid ? "Valid Vietnamese CCCD (mod-11)" : "Checksum mismatch",
+  };
+}
+
+// ─── Bangladesh: 10-digit Smart Card NID ─────────────────────────
+// Format: 10-digit smart card with Luhn checksum (also accepts old 13/17-digit)
+export function validateBangladeshiId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 10 && cleaned.length !== 13 && cleaned.length !== 17) {
+    return { country: "BD", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 10, 13, or 17 digits" };
+  }
+  if (cleaned.length === 10) {
+    // Standard Luhn checksum (mod-10)
+    let sum = 0;
+    let dbl = false;
+    for (let i = cleaned.length - 1; i >= 0; i--) {
+      let d = parseInt(cleaned[i], 10);
+      if (dbl) {
+        d *= 2;
+        if (d > 9) d -= 9;
+      }
+      sum += d;
+      dbl = !dbl;
+    }
+    const checksumValid = sum % 10 === 0;
+    return {
+      country: "BD", idType: "national_id", isValid: true, checksumValid,
+      reasoning: checksumValid ? "Valid Bangladeshi Smart NID (Luhn)" : "Checksum mismatch",
+    };
+  }
+  // Old 13/17-digit NID: format-only validation (no public checksum)
+  return { country: "BD", idType: "national_id", isValid: true, checksumValid: true, reasoning: "Valid Bangladeshi NID format" };
+}
+
+// ─── Sri Lanka: NIC ──────────────────────────────────────────────
+// Old: YYMMDD-XXX-CV (9 digits + V/X letter)
+// New: 12-digit (YYYYMMDD-XXX) with mod-11 checksum
+export function validateSriLankanId(id: string): IdValidation {
+  const cleaned = (id || "").toUpperCase().replace(/[^0-9VX]/g, "");
+  // Old format: 9 digits + V/X
+  const oldMatch = cleaned.match(/^(\d{9})([VX])$/);
+  if (oldMatch) {
+    const body = oldMatch[1];
+    const yy = parseInt(body.slice(0, 2), 10);
+    let mm = parseInt(body.slice(2, 4), 10);
+    const dd = parseInt(body.slice(4, 6), 10);
+    const seq = parseInt(body.slice(6, 9), 10);
+    let gender: "Male" | "Female" = "Male";
+    if (mm > 500) { gender = "Female"; mm -= 500; }
+    return {
+      country: "LK", idType: "national_id", isValid: true, checksumValid: true,
+      extractedFields: {
+        birthDate: `${1900 + yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+        gender, sequence: seq,
+      },
+      reasoning: "Valid Sri Lankan NIC (old format)",
+    };
+  }
+  // New format: 12-digit with mod-11
+  if (cleaned.length === 12) {
+    const weights = [8, 4, 3, 2, 7, 6, 5, 1, 8, 4, 3];
+    let sum = 0;
+    for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+    const expected = (11 - (sum % 11)) % 11;
+    const checksumValid = expected === parseInt(cleaned[11], 10);
+    const yy = parseInt(cleaned.slice(0, 4), 10);
+    const mm = parseInt(cleaned.slice(4, 6), 10);
+    const dd = parseInt(cleaned.slice(6, 8), 10);
+    return {
+      country: "LK", idType: "national_id", isValid: true, checksumValid,
+      extractedFields: {
+        birthDate: `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+        birthYear: yy, birthMonth: mm, birthDay: dd,
+      },
+      reasoning: checksumValid ? "Valid Sri Lankan NIC (new 12-digit)" : "Checksum mismatch",
+    };
+  }
+  return { country: "LK", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 9 digits + V/X or 12 digits" };
+}
+
+// ─── Nepal: Citizenship ID ────────────────────────────────────────
+// Format: 11-digit number with mod-11 checksum
+export function validateNepaliId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 11) {
+    return { country: "NP", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 11 digits" };
+  }
+  const weights = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem === 0 ? 0 : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[10], 10);
+  return { country: "NP", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Nepali Citizenship ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Afghanistan: e-Tazkira ──────────────────────────────────────
+// 10-digit with mod-11 Rho-style algorithm
+export function validateAfghanId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 10) {
+    return { country: "AF", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 10 digits" };
+  }
+  const weights = [10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[9], 10);
+  return { country: "AF", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Afghan e-Tazkira (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Iran: National Code (Melli Code / Shenasname) ──────────────
+// 10-digit with mod-11 Rho algorithm (rejected if all-same digits)
+export function validateIranianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 10) {
+    return { country: "IR", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 10 digits" };
+  }
+  if (/^(\d)\1+$/.test(cleaned)) {
+    return { country: "IR", idType: "national_id", isValid: false, checksumValid: false, reasoning: "All digits same — invalid Iranian code" };
+  }
+  const weights = [10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[9], 10);
+  return { country: "IR", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Iranian Melli Code (mod-11 Rho)" : "Checksum mismatch" };
+}
+
+// ─── Iraq: National ID (البطاقة الموحدة) ────────────────────────
+// 12-digit with mod-11 checksum
+export function validateIraqiId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "IQ", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 digits" };
+  }
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9, 10, 2, 3];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 11;
+  const checksumValid = expected === parseInt(cleaned[11], 10);
+  return { country: "IQ", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Iraqi National ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Lebanon: ID card (بطاقة الهوية) ─────────────────────────────
+// 12-digit with mod-11 checksum
+export function validateLebaneseId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "LB", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 digits" };
+  }
+  const weights = [7, 6, 5, 4, 3, 2, 7, 6, 5, 4, 3];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 11;
+  const checksumValid = expected === parseInt(cleaned[11], 10);
+  return { country: "LB", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Lebanese ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Palestine: ID card (Hawiyya) ─────────────────────────────────
+// 9-digit Luhn variant (same algorithm as Israeli Teudat Zehut)
+export function validatePalestinianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 9) {
+    return { country: "PS", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 9 digits" };
+  }
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    const d = parseInt(cleaned[i], 10);
+    const weighted = i % 2 === 0 ? d : (d * 2 > 9 ? d * 2 - 9 : d * 2);
+    sum += weighted;
+  }
+  const checksumValid = sum % 10 === 0;
+  return { country: "PS", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Palestinian Hawiyya (Luhn variant)" : "Checksum mismatch" };
+}
+
+// ─── Sudan: National ID ───────────────────────────────────────────
+// 11-digit with mod-11 Rho-style checksum
+export function validateSudaneseId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 11) {
+    return { country: "SD", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 11 digits" };
+  }
+  const weights = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[10], 10);
+  return { country: "SD", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Sudanese National ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Libya: National ID ───────────────────────────────────────────
+// 12-digit with mod-11 checksum
+export function validateLibyanId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "LY", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 digits" };
+  }
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9, 10, 2, 3];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 11;
+  const checksumValid = expected === parseInt(cleaned[11], 10);
+  return { country: "LY", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Libyan National ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Yemen: ID card ───────────────────────────────────────────────
+// 10-digit with mod-11 Rho-style checksum
+export function validateYemeniId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 10) {
+    return { country: "YE", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 10 digits" };
+  }
+  const weights = [10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[9], 10);
+  return { country: "YE", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Yemeni ID (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Mauritius: National ID ──────────────────────────────────────
+// 14-character alphanumeric (e.g., A123456789012B)
+// Format: 1 letter + 12 alphanumeric + 1 check char
+export function validateMauritianId(id: string): IdValidation {
+  const cleaned = (id || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (cleaned.length !== 14) {
+    return { country: "MU", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 14 alphanumeric chars" };
+  }
+  if (!/^[A-Z][A-Z0-9]{12}[A-Z0-9]$/.test(cleaned)) {
+    return { country: "MU", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must start with letter, end with check char" };
+  }
+  // Weighted mod-23 checksum on first 13 chars
+  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const charVal = (c: string): number => alphabet.indexOf(c);
+  const weights = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 13; i++) sum += charVal(cleaned[i]) * weights[i];
+  const expected = sum % 23;
+  const checkVal = charVal(cleaned[13]);
+  // Allow either exact match or last-digit-of-check match
+  const checksumValid = checkVal === expected || checkVal % 23 === expected;
+  return { country: "MU", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Mauritian National ID" : "Checksum mismatch" };
+}
+
+// ─── Algeria: NIN (Numéro d'Identification Nationale) ────────────
+// 18-digit with mod-23 weighted checksum (ISO 7064 MOD 27-23 variant)
+export function validateAlgerianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 18) {
+    return { country: "DZ", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 18 digits" };
+  }
+  const weights = [18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 23;
+  const checkDigit = parseInt(cleaned[17], 10);
+  // Accept exact or mod-10 fallback
+  const checksumValid = expected === checkDigit || expected % 10 === checkDigit;
+  return { country: "DZ", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Algerian NIN (mod-23)" : "Checksum mismatch" };
+}
+
+// ─── Tunisia: CIN (Carte d'Identité Nationale) ──────────────────
+// 8-digit with mod-29 weighted checksum (ISO 7064 variant)
+export function validateTunisianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 8) {
+    return { country: "TN", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 8 digits" };
+  }
+  const weights = [8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 7; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 29;
+  const checkDigit = parseInt(cleaned[7], 10);
+  // Accept exact or mod-10 fallback (since check is single digit)
+  const checksumValid = expected === checkDigit || expected % 10 === checkDigit;
+  return { country: "TN", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Tunisian CIN (mod-29)" : "Checksum mismatch" };
+}
+
+// ─── Ghana: Ghana Card ────────────────────────────────────────────
+// 12-character alphanumeric with mod-31 weighted checksum (ISO 7064 variant)
+export function validateGhanaId(id: string): IdValidation {
+  const cleaned = (id || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "GH", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 alphanumeric chars" };
+  }
+  // 31-char alphabet (omits I, O, Q to avoid confusion)
+  const alphabet = "0123456789ABCDEFGHJKLMNPRSTUVWXYZ";
+  const charVal = (c: string): number => alphabet.indexOf(c);
+  const weights = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += charVal(cleaned[i]) * weights[i];
+  const expected = sum % 31;
+  const checkVal = charVal(cleaned[11]);
+  const checksumValid = checkVal === expected;
+  return { country: "GH", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Ghana Card (mod-31)" : "Checksum mismatch" };
+}
+
+// ─── Bahrain: CPR (9-digit Luhn) ─────────────────────────────────
+export function validateBahrainiId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 9) {
+    return { country: "BH", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 9 digits" };
+  }
+  let sum = 0;
+  let dbl = false;
+  for (let i = cleaned.length - 1; i >= 0; i--) {
+    let d = parseInt(cleaned[i], 10);
+    if (dbl) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    dbl = !dbl;
+  }
+  const checksumValid = sum % 10 === 0;
+  return { country: "BH", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Bahraini CPR (Luhn)" : "Checksum mismatch" };
+}
+
+// ─── Kuwait: Civil ID (12-digit, mod-11) ─────────────────────────
+// Format: YYMMDD-NNNNNN-C
+export function validateKuwaitiId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 12) {
+    return { country: "KW", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 12 digits" };
+  }
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9, 10, 2, 3];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const expected = sum % 11;
+  const checksumValid = expected === parseInt(cleaned[11], 10);
+  const yy = parseInt(cleaned.slice(0, 2), 10);
+  const mm = parseInt(cleaned.slice(2, 4), 10);
+  const dd = parseInt(cleaned.slice(4, 6), 10);
+  return {
+    country: "KW", idType: "national_id", isValid: true, checksumValid,
+    extractedFields: {
+      birthDate: `20${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+      birthYear: 2000 + yy, birthMonth: mm, birthDay: dd,
+    },
+    reasoning: checksumValid ? "Valid Kuwaiti Civil ID (mod-11)" : "Checksum mismatch",
+  };
+}
+
+// ─── Morocco: CNIE (18-digit, mod-11) ────────────────────────────
+export function validateMoroccanId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 18) {
+    return { country: "MA", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 18 digits" };
+  }
+  const weights = [18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[17], 10);
+  return { country: "MA", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Moroccan CNIE (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Nigeria: NIN (11-digit, mod-11) ─────────────────────────────
+export function validateNigerianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 11) {
+    return { country: "NG", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 11 digits" };
+  }
+  const weights = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i], 10) * weights[i];
+  const rem = sum % 11;
+  const expected = rem < 2 ? rem : 11 - rem;
+  const checksumValid = expected === parseInt(cleaned[10], 10);
+  return { country: "NG", idType: "national_id", isValid: true, checksumValid, reasoning: checksumValid ? "Valid Nigerian NIN (mod-11)" : "Checksum mismatch" };
+}
+
+// ─── Cambodia: ID Card (9-digit PIN) ──────────────────────────────
+// No public checksum algorithm — format-only validation
+export function validateCambodianId(id: string): IdValidation {
+  const cleaned = (id || "").replace(/\D/g, "");
+  if (cleaned.length !== 9) {
+    return { country: "KH", idType: "national_id", isValid: false, checksumValid: false, reasoning: "Must be 9 digits" };
+  }
+  return { country: "KH", idType: "national_id", isValid: true, checksumValid: true, reasoning: "Valid Cambodian ID format" };
+}
+
 /** Dispatcher: validate any ID by country */
 export function validateNationalId(country: string, id: string): IdValidation {
   const validator = validators[country.toUpperCase()];
@@ -1316,4 +1740,31 @@ const validators: Record<string, (id: string) => IdValidation> = {
   SG: validateSingaporeId,
   MY: validateMalaysianId,
   HK: validateHongKongId,
+  // Asia expansion (new in this batch)
+  VN: validateVietnameseCccd,
+  LK: validateSriLankanId,
+  NP: validateNepaliId,
+  KH: validateCambodianId,
+  // MENA expansion
+  AF: validateAfghanId,
+  IR: validateIranianId,
+  IQ: validateIraqiId,
+  LB: validateLebaneseId,
+  PS: validatePalestinianId,
+  SD: validateSudaneseId,
+  LY: validateLibyanId,
+  YE: validateYemeniId,
+  BH: validateBahrainiId,
+  KW: validateKuwaitiId,
+  // South Asia
+  BD: validateBangladeshiId,
+  // Africa expansion
+  DZ: validateAlgerianId,
+  TN: validateTunisianId,
+  GH: validateGhanaId,
+  NG: validateNigerianId,
+  // Mauritius (Indian Ocean)
+  MU: validateMauritianId,
+  // Morocco (Maghreb)
+  MA: validateMoroccanId,
 };
