@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -20,13 +20,14 @@ import { SpecsBrowser } from "@/components/verify/specs-browser";
 import { InfraDashboard } from "@/components/verify/infra-dashboard";
 import { RealtimeDashboard } from "@/components/verify/realtime-dashboard";
 import { ApiDocsModal } from "@/components/verify/api-docs-modal";
+import { BenchmarkDashboard } from "@/components/verify/benchmark-dashboard";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 import { ChatWidget } from "@/components/chatbot/chat-widget";
 import { LocaleToggle } from "@/components/i18n/locale-toggle";
 import { useI18n } from "@/components/i18n/use-i18n";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 
-type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live";
+type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live" | "benchmark";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
@@ -60,6 +61,7 @@ export default function Home() {
             <NavButton active={view === "infra"} onClick={() => setView("infra")} icon={Gauge} label={t("nav.infra")} />
             <NavButton active={view === "live"} onClick={() => setView("live")} icon={Radio} label="Live" />
             <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label={t("nav.lab")} />
+            <NavButton active={view === "benchmark"} onClick={() => setView("benchmark")} icon={BarChart3} label={t("nav.benchmark")} />
             <ApiDocsModal />
             <LocaleToggle />
           </div>
@@ -80,6 +82,8 @@ export default function Home() {
           <RealtimeDashboard onBack={() => setView("wizard")} />
         ) : view === "eval" ? (
           <EvaluationLab onBack={() => setView("wizard")} />
+        ) : view === "benchmark" ? (
+          <BenchmarkDashboard onBack={() => setView("wizard")} />
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (

@@ -22,6 +22,7 @@ import { run as biasDetectionTests } from "./bias-detection.test";
 import { run as adversarialDetectionTests } from "./adversarial-detection.test";
 import { run as multimodalFusionTests } from "./multimodal-fusion.test";
 import { run as continuousAuthTests } from "./continuous-auth.test";
+import { run as webhookSystemTests } from "./webhook-system.test";
 import { run as healthTests } from "./health.test";
 import { run as endpointTests } from "./endpoints.test";
 import { ensureServerRunning, stopSpawnedServer, BASE_URL } from "./lib/server";
@@ -40,6 +41,7 @@ const FILES: Array<{ name: string; run: () => Promise<TestResult[]> }> = [
   { name: "continuous-auth.test.ts", run: continuousAuthTests },
   { name: "health.test.ts", run: healthTests },
   { name: "endpoints.test.ts", run: endpointTests },
+  { name: "webhook-system.test.ts", run: webhookSystemTests },
 ];
 
 function padRight(s: string, n: number): string {

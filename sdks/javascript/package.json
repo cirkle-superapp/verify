@@ -1,0 +1,46 @@
+{
+  "name": "@cirkle/verify",
+  "version": "1.0.0",
+  "description": "JavaScript/TypeScript SDK for the Cirkle Identity Verification API",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "bun build src/index.ts --target=browser --format=esm --outfile dist/index.mjs && bun build src/index.ts --target=node --format=cjs --outfile dist/index.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'SDK unit tests — see tests/sdk.test.ts in the host project' && exit 0"
+  },
+  "keywords": [
+    "cirkle",
+    "identity-verification",
+    "kyc",
+    "ocr",
+    "face-match",
+    "liveness",
+    "mrz",
+    "webhook",
+    "gdpr"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

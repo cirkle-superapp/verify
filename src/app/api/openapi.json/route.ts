@@ -813,6 +813,24 @@ const spec = {
         },
       ),
     },
+    "/api/v1/verify/real-ocr": {
+      ...postOp(
+        "V1 API",
+        "Real OCR pipeline",
+        "Self-hosted OCR pipeline using Tesseract.js + OCR post-processing + field extraction. Works without external AI providers. Falls back to a regex extractor if Tesseract.js can't be initialized (Bun regenerator-runtime issue).",
+        "#/components/schemas/ImageAnalysisRequest",
+        { okDescription: "RealOcrResult { text, arabicText, englishText, words[], lines[], fields{}, processingTimeMs, engine, confidence }." },
+      ),
+    },
+    "/api/v1/verify/webhook-system": {
+      ...postOp(
+        "V1 API",
+        "Webhook system (event-driven with retries + DLQ)",
+        "Register/unregister/trigger/replay webhooks. HMAC-SHA256 signed deliveries with 3-attempt exponential backoff (1s, 4s, 16s) and a dead-letter queue for failed events. Actions: register, unregister, trigger, replay (pass via body.action or ?action= query).",
+        "#/components/schemas/CrossCheckRequest",
+        { okDescription: "WebhookSystemResponse { ok, action, endpoint?, events?, dispatched }." },
+      ),
+    },
 
     // ─── Chatbot ──────────────────────────────────────────────────────
     "/api/chat": {
