@@ -3,136 +3,310 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Cirkle (دواير) — Premium Design System
+   Source: github.com/fortleem/cirkle-ac8fabe4/src/index.css
+
+   All colors HSL. No ad-hoc colors in components.
+   Brand: gold (#C2A060) + teal (#1A4A5A) + rose (#C06070)
+   ════════════════════════════════════════════════════════════════════════════ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), 'Inter', 'SF Pro Display', system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-arabic: var(--font-cairo), "Segoe UI", Tahoma, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --font-arabic: var(--font-cairo), 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
+  --font-display: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
+
+  /* Brand color tokens */
+  --color-brand-gold: hsl(var(--gold));
+  --color-brand-teal: hsl(var(--teal));
+  --color-brand-rose: hsl(var(--rose));
+  --color-brand-steel: hsl(var(--steel));
+  --color-brand-charcoal: hsl(var(--charcoal));
+  --color-brand-cream: hsl(var(--cream));
+
+  /* Surface */
+  --color-surface: hsl(var(--surface));
+  --color-surface-elevated: hsl(var(--surface-elevated));
+
+  /* Semantic */
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Chart */
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  /* Sidebar */
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* Radii */
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 12px);
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.4s var(--ease-out-expo);
+  --animate-scale-in: scale-in 0.3s var(--ease-out-expo);
+  --animate-slide-up: slide-up 0.5s var(--ease-out-expo);
+  --animate-wave: wave 1.2s ease-in-out infinite;
+  --animate-marquee: marquee 30s linear infinite;
+
+  @keyframes fade-in {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes slide-up {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.4); }
+    50% { transform: scaleY(1); }
+  }
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   :root — Light theme
+   ════════════════════════════════════════════════════════════════════════════ */
 :root {
+  /* Brand */
+  --gold: 39 45% 57%;          /* #C2A060 */
+  --teal: 195 56% 23%;          /* #1A4A5A */
+  --rose: 351 41% 56%;          /* #C06070 */
+  --steel: 211 30% 42%;         /* #4A6A8A */
+  --charcoal: 60 8% 9%;         /* #1A1A14 */
+  --cream: 40 50% 98%;          /* #FDFCF9 */
+
+  /* Semantic — Light */
+  --background: 40 50% 98%;
+  --foreground: 60 8% 9%;
+  --surface: 40 35% 96%;
+  --surface-elevated: 0 0% 100%;
+  --card: 0 0% 100%;
+  --card-foreground: 60 8% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 60 8% 9%;
+
+  --primary: 195 56% 23%;
+  --primary-foreground: 40 50% 98%;
+  --secondary: 39 45% 57%;
+  --secondary-foreground: 60 8% 9%;
+  --accent: 351 41% 56%;
+  --accent-foreground: 40 50% 98%;
+  --muted: 40 25% 92%;
+  --muted-foreground: 60 6% 35%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 40 50% 98%;
+
+  --border: 40 20% 88%;
+  --input: 40 20% 88%;
+  --ring: 195 56% 23%;
   --radius: 1.25rem;
-  /* Cirkle brand (from cirkleapp.vercel.app :root CSS variables):
-     --gold:   39 45% 57%  → #d1b685 (warm gold/tan) — secondary
-     --rose:   351 41% 56% → #bd616f (dusty rose) — accent
-     --teal:   195 56% 23% → #1a4b5b (deep teal) — primary
-     --cream:  40 50% 98%  → warm cream background
-     The logo gradient is gold → rose → teal. */
-  --background: oklch(0.985 0.008 70);        /* warm cream #FDFCF9-ish */
-  --foreground: oklch(0.22 0.01 60);          /* --charcoal: 60 8% 9% */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.01 60);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.01 60);
-  --primary: oklch(0.36 0.07 195);           /* --teal: 195 56% 23% = #1a4b5b */
-  --primary-foreground: oklch(0.985 0.008 70);
-  --secondary: oklch(0.75 0.07 70);          /* --gold: 39 45% 57% = #d1b685 */
-  --secondary-foreground: oklch(0.22 0.01 60);
-  --muted: oklch(0.95 0.01 70);
-  --muted-foreground: oklch(0.45 0.01 60);
-  --accent: oklch(0.58 0.10 351);            /* --rose: 351 41% 56% = #bd616f */
-  --accent-foreground: oklch(0.985 0.008 70);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.90 0.01 70);
-  --input: oklch(0.90 0.01 70);
-  --ring: oklch(0.36 0.07 195);              /* teal ring */
-  --chart-1: oklch(0.36 0.07 195);           /* teal */
-  --chart-2: oklch(0.75 0.07 70);            /* gold */
-  --chart-3: oklch(0.58 0.10 351);           /* rose */
-  --chart-4: oklch(0.55 0.05 211);           /* steel */
-  --chart-5: oklch(0.65 0.06 60);            /* warm */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.22 0.01 60);
-  --sidebar-primary: oklch(0.36 0.07 195);
-  --sidebar-primary-foreground: oklch(0.985 0.008 70);
-  --sidebar-accent: oklch(0.95 0.01 70);
-  --sidebar-accent-foreground: oklch(0.36 0.07 195);
-  --sidebar-border: oklch(0.90 0.01 70);
-  --sidebar-ring: oklch(0.36 0.07 195);
+
+  /* Glass */
+  --glass-bg: 0 0% 100% / 0.55;
+  --glass-border: 40 30% 85% / 0.6;
+
+  /* Gradients */
+  --gradient-hero: linear-gradient(135deg, hsl(195 56% 23%) 0%, hsl(211 30% 42%) 50%, hsl(351 41% 56%) 100%);
+  --gradient-gold: linear-gradient(135deg, hsl(39 45% 67%) 0%, hsl(39 45% 47%) 100%);
+  --gradient-aurora: radial-gradient(ellipse at top left, hsl(351 41% 56% / 0.35), transparent 50%),
+                     radial-gradient(ellipse at bottom right, hsl(195 56% 33% / 0.4), transparent 55%),
+                     radial-gradient(ellipse at center, hsl(39 45% 57% / 0.2), transparent 60%);
+  --gradient-mesh: conic-gradient(from 180deg at 50% 50%, hsl(195 56% 23%), hsl(351 41% 56%), hsl(39 45% 57%), hsl(211 30% 42%), hsl(195 56% 23%));
+  --gradient-card: linear-gradient(160deg, hsl(0 0% 100% / 0.8), hsl(40 35% 96% / 0.4));
+
+  /* Shadows */
+  --shadow-soft: 0 2px 10px -2px hsl(60 8% 9% / 0.06), 0 8px 30px -10px hsl(60 8% 9% / 0.08);
+  --shadow-glow: 0 0 40px hsl(39 45% 57% / 0.4);
+  --shadow-glass: 0 8px 32px hsl(195 56% 23% / 0.12);
+  --shadow-float: 0 20px 50px -15px hsl(60 8% 9% / 0.25);
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Chart colors */
+  --chart-1: 195 56% 23%;    /* teal */
+  --chart-2: 39 45% 57%;     /* gold */
+  --chart-3: 351 41% 56%;    /* rose */
+  --chart-4: 211 30% 42%;    /* steel */
+  --chart-5: 60 6% 35%;      /* warm gray */
+
+  /* Sidebar */
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 60 8% 9%;
+  --sidebar-primary: 195 56% 23%;
+  --sidebar-primary-foreground: 40 50% 98%;
+  --sidebar-accent: 40 25% 92%;
+  --sidebar-accent-foreground: 60 8% 9%;
+  --sidebar-border: 40 20% 88%;
+  --sidebar-ring: 195 56% 23%;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   .dark — Dark theme
+   ════════════════════════════════════════════════════════════════════════════ */
 .dark {
-  /* Cirkle dark theme: charcoal bg, gold/rose/teal accents */
-  --background: oklch(0.16 0.005 60);           /* --charcoal: 60 8% 9% */
-  --foreground: oklch(0.96 0.008 70);           /* cream text */
-  --card: oklch(0.22 0.005 60);
-  --card-foreground: oklch(0.96 0.008 70);
-  --popover: oklch(0.22 0.005 60);
-  --popover-foreground: oklch(0.96 0.008 70);
-  --primary: oklch(0.75 0.07 70);              /* gold as primary in dark */
-  --primary-foreground: oklch(0.16 0.005 60);
-  --secondary: oklch(0.28 0.01 60);
-  --secondary-foreground: oklch(0.96 0.008 70);
-  --muted: oklch(0.28 0.01 60);
-  --muted-foreground: oklch(0.68 0.01 60);
-  --accent: oklch(0.58 0.10 351);              /* rose */
-  --accent-foreground: oklch(0.96 0.008 70);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.75 0.07 70);                /* gold ring in dark */
-  --chart-1: oklch(0.75 0.07 70);              /* gold */
-  --chart-2: oklch(0.58 0.10 351);             /* rose */
-  --chart-3: oklch(0.45 0.07 195);             /* teal */
-  --chart-4: oklch(0.65 0.06 60);              /* warm */
-  --chart-5: oklch(0.55 0.05 211);             /* steel */
-  --sidebar: oklch(0.22 0.005 60);
-  --sidebar-foreground: oklch(0.96 0.008 70);
-  --sidebar-primary: oklch(0.75 0.07 70);
-  --sidebar-primary-foreground: oklch(0.16 0.005 60);
-  --sidebar-accent: oklch(0.28 0.01 60);
-  --sidebar-accent-foreground: oklch(0.96 0.008 70);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.75 0.07 70);
+  --background: 60 8% 6%;
+  --foreground: 40 50% 98%;
+  --surface: 60 8% 9%;
+  --surface-elevated: 60 8% 12%;
+  --card: 60 8% 10%;
+  --card-foreground: 40 50% 98%;
+  --popover: 60 8% 10%;
+  --popover-foreground: 40 50% 98%;
+
+  --primary: 39 45% 57%;
+  --primary-foreground: 60 8% 9%;
+  --secondary: 195 56% 33%;
+  --secondary-foreground: 40 50% 98%;
+  --accent: 351 41% 56%;
+  --accent-foreground: 40 50% 98%;
+  --muted: 60 6% 16%;
+  --muted-foreground: 40 15% 65%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 40 50% 98%;
+
+  --border: 60 6% 18%;
+  --input: 60 6% 18%;
+  --ring: 39 45% 57%;
+
+  --glass-bg: 60 8% 10% / 0.55;
+  --glass-border: 39 45% 57% / 0.15;
+
+  --gradient-hero: linear-gradient(135deg, hsl(195 56% 18%) 0%, hsl(211 30% 25%) 50%, hsl(351 41% 36%) 100%);
+  --gradient-aurora: radial-gradient(ellipse at top left, hsl(351 41% 56% / 0.25), transparent 50%),
+                     radial-gradient(ellipse at bottom right, hsl(195 56% 43% / 0.3), transparent 55%),
+                     radial-gradient(ellipse at center, hsl(39 45% 57% / 0.15), transparent 60%);
+  --gradient-card: linear-gradient(160deg, hsl(60 8% 14% / 0.8), hsl(60 8% 8% / 0.4));
+
+  --shadow-soft: 0 2px 10px -2px hsl(0 0% 0% / 0.4), 0 8px 30px -10px hsl(0 0% 0% / 0.5);
+  --shadow-glow: 0 0 50px hsl(39 45% 57% / 0.35);
+  --shadow-glass: 0 8px 32px hsl(0 0% 0% / 0.4);
+  --shadow-float: 0 20px 50px -15px hsl(0 0% 0% / 0.6);
+
+  --chart-1: 39 45% 57%;     /* gold (primary in dark) */
+  --chart-2: 351 41% 56%;    /* rose */
+  --chart-3: 195 56% 43%;    /* teal lighter */
+  --chart-4: 211 30% 52%;    /* steel lighter */
+  --chart-5: 40 15% 65%;     /* warm gray */
+
+  --sidebar-background: 60 8% 10%;
+  --sidebar-foreground: 40 15% 65%;
+  --sidebar-primary: 39 45% 57%;
+  --sidebar-primary-foreground: 60 8% 9%;
+  --sidebar-accent: 60 6% 16%;
+  --sidebar-accent-foreground: 40 15% 65%;
+  --sidebar-border: 60 6% 18%;
+  --sidebar-ring: 39 45% 57%;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Base layer
+   ════════════════════════════════════════════════════════════════════════════ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
   .font-arabic {
     font-family: var(--font-arabic);
   }
+  .font-display {
+    font-family: var(--font-display);
+  }
 }
 
-/* custom scrollbar for the long list areas */
+/* ════════════════════════════════════════════════════════════════════════════
+   Component utility classes
+   ════════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Glass card */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* Gradient hero background */
+  .bg-gradient-hero {
+    background-image: var(--gradient-hero);
+  }
+  .bg-gradient-gold {
+    background-image: var(--gradient-gold);
+  }
+  .bg-gradient-aurora {
+    background-image: var(--gradient-aurora);
+  }
+  .bg-gradient-mesh {
+    background-image: var(--gradient-mesh);
+  }
+  .bg-gradient-card {
+    background-image: var(--gradient-card);
+  }
+
+  /* Shadow utilities */
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-glow { box-shadow: var(--shadow-glow); }
+  .shadow-glass { box-shadow: var(--shadow-glass); }
+  .shadow-float { box-shadow: var(--shadow-float); }
+
+  /* Brand text gradient */
+  .text-gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--gold)), hsl(var(--rose)), hsl(var(--teal)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Custom scrollbar
+   ════════════════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -141,31 +315,22 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.37 0.06 220);
+  background: hsl(var(--teal) / 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.50 0.06 220);
+  background: hsl(var(--teal) / 0.5);
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.68 0.10 180);
+  background: hsl(var(--gold) / 0.3);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--gold) / 0.5);
 }
 
-/* Cirkle official animations — copied from cirkleapp.vercel.app CSS
-   (/_next/static/chunks/de79388cad073314.css)
-
-   .animate-orb-float { animation: 6s ease-in-out infinite orbFloat }
-   .animate-pulse-glow { animation: 2.5s ease-in-out infinite pulseGlow }
-
-   @keyframes orbFloat {
-     0%, to { transform: translateY(0) scale(1); }
-     50%   { transform: translateY(-12px) scale(1.05); }
-   }
-   @keyframes pulseGlow {
-     0%, to { box-shadow: 0 0 0 0 hsl(var(--primary)/.5); }
-     50%   { box-shadow: 0 0 0 16px hsl(var(--primary)/0); }
-   }
-*/
+/* ════════════════════════════════════════════════════════════════════════════
+   Cirkle animations
+   ════════════════════════════════════════════════════════════════════════════ */
 
 @keyframes cirkle-orbFloat {
   0%, 100% { transform: translateY(0) scale(1); }
@@ -173,11 +338,10 @@
 }
 
 @keyframes cirkle-pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.36 0.07 195 / 0.5); }
-  50% { box-shadow: 0 0 0 16px oklch(0.36 0.07 195 / 0); }
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5); }
+  50% { box-shadow: 0 0 0 16px hsl(var(--primary) / 0); }
 }
 
-/* Splash entrance — fade in + unblur + scale up (from the live splash screen) */
 @keyframes cirkle-splashIn {
   0% { opacity: 0; filter: blur(40px); transform: scale(0.3); }
   100% { opacity: 1; filter: blur(0); transform: scale(1); }

@@ -36,9 +36,9 @@ export default function Home() {
   const { t } = useI18n();
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-muted/40 via-background to-background">
+    <div className="min-h-screen flex flex-col bg-gradient-aurora">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 border-b border-border glass shadow-soft">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
           <button
             onClick={() => {
@@ -104,7 +104,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-border bg-background/80 backdrop-blur">
+      <footer className="mt-auto border-t border-border glass shadow-soft">
         <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <CirkleLogo size={18} animated={false} />

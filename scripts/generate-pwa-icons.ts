@@ -1,20 +1,27 @@
 /**
- * Cirkle PWA Icon Generator
+ * Cirkle PWA Icon Generator — Premium Design System
  *
  * Generates the three PNG icons referenced by /public/manifest.json:
  *   - icon-192.png            (192×192, purpose=any)
  *   - icon-512.png            (512×512, purpose=any)
  *   - icon-512-maskable.png   (512×512, purpose=maskable — has 20% safe-zone padding)
  *
- * Uses @napi-rs/canvas (already in package.json). The icon is a simple
- * Cirkle brand mark: dark background (#0d1117) with a green ring (#1a6b3a)
- * and a centered white "C" glyph.
+ * Uses @napi-rs/canvas (already in package.json). The icon is the official
+ * Cirkle CircleMark: three overlapping circles with a gold→rose→teal gradient
+ * stroke and a small filled gradient dot in the center.
+ *
+ * Brand colors (from fortleem/cirkle-ac8fabe4):
+ *   --gold:   39 45% 57%  → #C2A060
+ *   --rose:   351 41% 56% → #C06070
+ *   --teal:   195 56% 23% → #1A4A5A
+ *   --cream:  40 50% 98%  → #FDFCF9 (background)
+ *   --charcoal: 60 8% 9%  → #1A1A14 (dark background for dark mode)
  *
  * Usage:
  *   bun run scripts/generate-pwa-icons.ts
  */
 
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalPixelFormat } from "@napi-rs/canvas";
 import { writeFileSync, mkdirSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -23,99 +30,100 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PUBLIC_DIR = resolve(__dirname, "..", "public");
 
-const BG = "#0d1117";
-const RING = "#1a6b3a";
-const RING_HIGHLIGHT = "#2ea563";
-const GLYPH = "#ffffff";
+// Cirkle brand colors (HSL → hex)
+const GOLD = "#C2A060";
+const ROSE = "#C06070";
+const TEAL = "#1A4A5A";
+const CREAM = "#FDFCF9";
+const CHARCOAL = "#1A1A14";
 
 /**
- * Draw the Cirkle brand mark — a green ring + a centered "C" glyph.
+ * Draw the Cirkle CircleMark — three overlapping circles in a triangular
+ * formation with a gold→rose→teal gradient stroke and a filled center dot.
  *
- * @param size      side length of the canvas in px
- * @param maskable  if true, scale the mark down to ~80% of the canvas to
- *                  leave the safe zone required by maskable icons (so the
- *                  OS doesn't clip into the ring when applying a mask)
+ * Matches the SVG in src/components/brand/cirkle-logo.tsx exactly:
+ *   <circle cx="50" cy="32" r="22" />   (top)
+ *   <circle cx="32" cy="60" r="22" />   (bottom-left)
+ *   <circle cx="68" cy="60" r="22" />   (bottom-right)
+ *   <circle cx="50" cy="50" r="6" fill /> (center dot)
  */
 function drawCirkleIcon(size: number, maskable = false): Buffer {
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext("2d");
 
-  // ─── Background ───────────────────────────────────────────────
-  ctx.fillStyle = BG;
+  // Scale factor: viewBox is 100×100, canvas is size×size
+  const scale = size / 100;
+  // For maskable, scale down to 80% to leave safe zone
+  const drawScale = maskable ? scale * 0.8 : scale;
+  const offset = maskable ? size * 0.1 : 0;
+
+  // Background
+  ctx.fillStyle = CREAM;
   ctx.fillRect(0, 0, size, size);
 
-  // Subtle radial vignette for depth
-  const vgrad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.7);
-  vgrad.addColorStop(0, "rgba(46,165,99,0.20)");
-  vgrad.addColorStop(1, "rgba(13,17,23,0)");
-  ctx.fillStyle = vgrad;
-  ctx.fillRect(0, 0, size, size);
+  // Create gradient: gold → rose → teal (135deg)
+  const grad = ctx.createLinearGradient(
+    offset,
+    offset,
+    offset + 100 * drawScale,
+    offset + 100 * drawScale
+  );
+  grad.addColorStop(0, GOLD);
+  grad.addColorStop(0.5, ROSE);
+  grad.addColorStop(1, TEAL);
 
-  // For maskable icons, the safe zone is the inner 80% — so scale the mark
-  // down to 0.7 to leave comfortable padding.
-  const scale = maskable ? 0.7 : 0.92;
-  const markSize = size * scale;
-  const offset = (size - markSize) / 2;
+  ctx.save();
+  ctx.translate(offset, offset);
+  ctx.scale(drawScale, drawScale);
 
-  // ─── Outer ring ────────────────────────────────────────────────
-  const ringCenterX = size / 2;
-  const ringCenterY = size / 2;
-  const outerRadius = markSize / 2;
-  const innerRadius = outerRadius * 0.78;
-  const ringWidth = outerRadius - innerRadius;
+  // Three overlapping circles (stroke only, semi-transparent)
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.9;
 
-  // Soft outer glow
-  ctx.shadowColor = RING_HIGHLIGHT;
-  ctx.shadowBlur = size * 0.04;
-  ctx.fillStyle = RING;
+  // Top circle (cx=50, cy=32, r=22)
   ctx.beginPath();
-  ctx.arc(ringCenterX, ringCenterY, outerRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Cut out the inner hole to make it a ring
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.beginPath();
-  ctx.arc(ringCenterX, ringCenterY, innerRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = "source-over";
-
-  // Add a subtle highlight on the top-left of the ring
-  ctx.strokeStyle = RING_HIGHLIGHT;
-  ctx.lineWidth = ringWidth * 0.18;
-  ctx.beginPath();
-  ctx.arc(ringCenterX, ringCenterY, (outerRadius + innerRadius) / 2, Math.PI * 1.1, Math.PI * 1.6);
+  ctx.arc(50, 32, 22, 0, Math.PI * 2);
   ctx.stroke();
 
-  // ─── "C" glyph (centered) ──────────────────────────────────────
-  ctx.fillStyle = GLYPH;
-  // Font size ~ 50% of the inner diameter
-  const fontSize = innerRadius * 1.05;
-  ctx.font = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  // Nudge y down a hair because "C" has no ascender/descender to center visually
-  ctx.fillText("C", ringCenterX, ringCenterY + size * 0.015);
+  // Bottom-left circle (cx=32, cy=60, r=22)
+  ctx.beginPath();
+  ctx.arc(32, 60, 22, 0, Math.PI * 2);
+  ctx.stroke();
 
-  // ─── Save ──────────────────────────────────────────────────────
+  // Bottom-right circle (cx=68, cy=60, r=22)
+  ctx.beginPath();
+  ctx.arc(68, 60, 22, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Center dot (cx=50, cy=50, r=6, filled)
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(50, 50, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
   return canvas.toBuffer("image/png");
 }
 
-function main() {
-  mkdirSync(PUBLIC_DIR, { recursive: true });
+// Generate all three icons
+const icons = [
+  { name: "icon-192.png", size: 192, maskable: false },
+  { name: "icon-512.png", size: 512, maskable: false },
+  { name: "icon-512-maskable.png", size: 512, maskable: true },
+];
 
-  const targets = [
-    { file: "icon-192.png", size: 192, maskable: false },
-    { file: "icon-512.png", size: 512, maskable: false },
-    { file: "icon-512-maskable.png", size: 512, maskable: true },
-  ];
+console.log("[INFO] Generating Cirkle PWA icons (premium design system)…");
+console.log(`[INFO] Brand colors: gold=${GOLD}, rose=${ROSE}, teal=${TEAL}, bg=${CREAM}`);
 
-  for (const t of targets) {
-    const buf = drawCirkleIcon(t.size, t.maskable);
-    const out = resolve(PUBLIC_DIR, t.file);
-    writeFileSync(out, buf);
-    console.log(`✓ wrote ${out} (${buf.length.toLocaleString()} bytes)`);
-  }
+for (const icon of icons) {
+  const buf = drawCirkleIcon(icon.size, icon.maskable);
+  const path = resolve(PUBLIC_DIR, icon.name);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, buf);
+  console.log(`[OK] ${icon.name} (${icon.size}×${icon.size}${icon.maskable ? ", maskable" : ""}) — ${(buf.length / 1024).toFixed(1)} KB`);
 }
 
-main();
+console.log("[DONE] All 3 PWA icons generated with the official Cirkle CircleMark.");
