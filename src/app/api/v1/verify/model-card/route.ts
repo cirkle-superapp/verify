@@ -64,7 +64,7 @@ export async function GET() {
     {
       // ─── Core model identity ──────────────────────────────────────
       model_name: "Cirkle Verify",
-      version: "3.0.0-outstanding",
+      version: "3.6.0-validation-expanded",
       description:
         "Zero-cost, edge-first, AI-consensus identity verification for Egyptian, Arabic, and international documents. v3 adds 6 state-of-the-art modules that competitors lack: Identity Graph fraud-ring detection, real-time Bias Detection with EU AI Act / NYC LL144 compliance, 8-detector Adversarial Attack Detection (FGSM, deepfake, 3D mask, hybrid), 5-modality Dempster-Shafer Biometric Fusion (face+voice+behavior+document+device), Continuous Authentication with trust decay + anomaly detection, and a pure-TypeScript Synthetic Data Generator for edge cases. 92 SOTA datasets in the training pipeline (9 categories); 54 ID validators with country-specific checksums across 73 countries; 132 document security specs.",
 
@@ -75,7 +75,7 @@ export async function GET() {
           "Document field extraction (OCR + AI consensus) for national IDs, passports, driver licenses, residence cards.",
           "Face matching between selfie and document photo (ISO/IEC 19794-5 quality scoring).",
           "Presentation attack detection (ISO/IEC 30107-3 PAD signals).",
-          "Cross-field validation (30 consistency checks) and fraud scoring.",
+          "Cross-field validation (45 consistency checks) and fraud scoring.",
           "Identity graph fraud-ring detection (post-onboarding collusion analysis).",
           "Real-time bias / fairness telemetry with regulator-grade audit trail.",
           "Adversarial ML attack detection (FGSM, PGD, deepfake, 3D mask, hybrid).",
@@ -389,7 +389,7 @@ export async function GET() {
 
       // ─── Last updated + provenance ───────────────────────────────
       last_updated: "2026-09-22",
-      model_card_version: "3.0",
+      model_card_version: "3.6",
       contact: "verify@cirkle.app",
 
       // ─── Extra context ──────────────────────────────────────────
@@ -543,20 +543,21 @@ export async function GET() {
         },
       },
 
-      // ─── v3 knowledgeBase (accurate counts) ────────────────────────
+      // ─── v3.5 knowledgeBase (accurate counts — expanded) ─────────
       knowledgeBase: {
-        idValidators: "54 countries",
-        documentSpecs: "132 specs across 73 countries",
-        crossFieldValidation: "30 consistency checks",
-        ocrPostProcessing: "Levenshtein + confusion patterns + 64 OCR patterns + 990-name dictionary (582 Arabic + 408 Western)",
+        idValidators: "75 countries",
+        documentSpecs: "175 specs across 93 countries",
+        documentTemplates: "81 templates across 50 countries",
+        crossFieldValidation: "45 consistency checks",
+        ocrPostProcessing: "Levenshtein + confusion patterns + 102 OCR patterns + 1696-name dictionary (906 Arabic + 790 Western)",
         faceQualityDimensions: 13,
         livenessPadSignals: 9,
         nameDictionary: {
-          arabicNames: 582,
-          westernNames: 408,
-          total: 990,
+          arabicNames: 906,
+          westernNames: 790,
+          total: 1696,
         },
-        ocrPatterns: 64,
+        ocrPatterns: 102,
       },
     },
     { headers: CORS_HEADERS },
