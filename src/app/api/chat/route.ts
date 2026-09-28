@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { randomUUID } from "crypto";
 import {
   searchKnowledgeBase,
@@ -7,7 +6,7 @@ import {
   type KnowledgeChunk,
 } from "@/lib/chatbot-knowledge-base";
 import { generateConversationalFallback } from "@/lib/chatbot-fallback";
-import { ensureZaiConfig } from "@/lib/zai-config";
+import { createChatCompletion, isLlmAvailable, getChatbotModel, getChatbotProvider, getConfiguredProviders } from "@/lib/multi-llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -248,46 +247,39 @@ export async function POST(req: NextRequest) {
   // RAG step 2: build the system prompt with retrieved context
   const systemPrompt = buildSystemPrompt(chunks);
 
-  // RAG step 3: call the LLM
+  // RAG step 3: call the LLM (Groq — no z.ai dependency)
   let replyText = "";
-  const model = "glm-4-plus";
+  const model = getChatbotModel();
+  const provider = getChatbotProvider();
   let llmOk = false;
   let llmError: string | null = null;
   try {
-    // Bootstrap the z-ai config file from env vars if missing
-    // (required for Vercel production where /etc/.z-ai-config doesn't exist)
-    const configResult = ensureZaiConfig();
-    if (configResult.ok) {
-      const zai = await ZAI.create();
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...truncatedMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        ],
-        thinking: { type: "disabled" },
-      });
-      const candidate = completion?.choices?.[0]?.message?.content || "";
-      if (candidate.trim()) {
-        replyText = candidate;
-        llmOk = true;
-      }
+    const completion = await createChatCompletion({
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...truncatedMessages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ],
+      temperature: 0.7,
+      maxTokens: 1024,
+    });
+    if (completion.content.trim()) {
+      replyText = completion.content;
+      llmOk = true;
     } else {
-      llmError = configResult.error || "config missing";
+      llmError = "Groq returned empty content";
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[chat] LLM call failed:", msg);
+    console.error("[chat] Groq LLM call failed:", msg);
     llmError = msg.slice(0, 200);
   }
 
   // Fallback: build a knowledge-base-only answer if LLM is unavailable.
-  // This happens on Vercel production where internal-api.z.ai is not
-  // reachable (sandbox-only) or when the API token is invalid.
   if (!llmOk) {
-    replyText = buildKnowledgeBaseFallback(query, chunks);
+    replyText = generateConversationalFallback(query, chunks);
   }
 
   const sessionId = body.sessionId || randomUUID();
@@ -299,6 +291,7 @@ export async function POST(req: NextRequest) {
       sources: chunks.map((c) => ({ title: c.title, source: c.source })),
       sessionId,
       model: llmOk ? model : `${model}-fallback-kb`,
+      provider: llmOk ? provider : "knowledge-base",
       mode: llmOk ? "llm" : "knowledge-base-fallback",
       llmError: llmOk ? null : llmError,
       timestamp: new Date().toISOString(),

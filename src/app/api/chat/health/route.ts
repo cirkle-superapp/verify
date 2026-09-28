@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getKnowledgeStats } from "@/lib/chatbot-knowledge-base";
+import { getChatbotModel, getChatbotProvider, isLlmAvailable, getConfiguredProviders } from "@/lib/multi-llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,20 +22,20 @@ export async function OPTIONS() {
  * GET /api/chat/health — chatbot service health.
  *
  * Reports:
- *   - status: "healthy" if the knowledge base loaded and stats are present.
+ *   - status: "healthy" if the knowledge base loaded + Groq LLM is available.
  *   - knowledgeBase: live stats from getKnowledgeStats().
- *   - llmProvider: "z-ai-web-dev-sdk".
- *   - model: "glm-4-plus".
+ *   - llmProvider: "groq" (no z.ai dependency).
+ *   - model: configured model (default: llama-3.3-70b-versatile).
  *   - rateLimit: { limit: 20, window: "1m" }.
  */
 export async function GET() {
   let status: "healthy" | "degraded" = "healthy";
   let knowledgeBase: ReturnType<typeof getKnowledgeStats> | null = null;
+  let llmAvailable: boolean | null = null;
   let error: string | undefined;
 
   try {
     knowledgeBase = getKnowledgeStats();
-    // Sanity check: if any of these are zero, mark degraded.
     if (
       !knowledgeBase ||
       knowledgeBase.docSpecs === 0 ||
@@ -48,13 +49,28 @@ export async function GET() {
     error = e instanceof Error ? e.message : String(e);
   }
 
+  // Check LLM availability across all providers
+  let llmProvider: string | null = null;
+  try {
+    const result = await isLlmAvailable();
+    llmAvailable = result.available;
+    llmProvider = result.provider;
+    if (!llmAvailable) status = "degraded";
+  } catch {
+    llmAvailable = false;
+    status = "degraded";
+  }
+
   return NextResponse.json(
     {
       status,
       timestamp: new Date().toISOString(),
       knowledgeBase,
-      llmProvider: "z-ai-web-dev-sdk",
-      model: "glm-4-plus",
+      llmProvider: getChatbotProvider(),
+      llmProviders: getConfiguredProviders(),
+      activeProvider: llmProvider,
+      model: getChatbotModel(),
+      llmAvailable,
       rateLimit: { limit: 20, window: "1m" },
       ...(error ? { error: error.slice(0, 300) } : {}),
     },
