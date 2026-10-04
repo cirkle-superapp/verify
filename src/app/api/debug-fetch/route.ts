@@ -1,64 +1,61 @@
 import { NextResponse } from "next/server";
+import { createChatCompletion, isLlmAvailable, getConfiguredProviders } from "@/lib/multi-llm";
 
 export const runtime = "nodejs";
 
-// GET /api/debug-fetch — test if the Z.ai API is reachable from Vercel
+/**
+ * GET /api/debug-fetch — test if the LLM providers are reachable
+ *
+ * Tests all configured AI providers (Groq, OpenRouter, NVIDIA, HuggingFace)
+ * to verify API keys are working and the platform can generate real LLM
+ * responses.
+ */
 export async function GET() {
   const results: any = {
     timestamp: new Date().toISOString(),
-    env: {
-      hasBaseUrl: !!process.env.ZAI_BASE_URL,
-      hasApiKey: !!process.env.ZAI_API_KEY,
-      hasToken: !!process.env.ZAI_TOKEN,
-      baseUrl: process.env.ZAI_BASE_URL || "(not set)",
-    },
+    providers: getConfiguredProviders(),
     tests: [],
   };
 
-  // Test 1: Can we reach the Z.ai API at all?
+  // Test 1: Check if any LLM provider is available
   try {
     const t0 = Date.now();
-    const res = await fetch("https://internal-api.z.ai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [{ role: "user", content: "test" }] }),
-    });
+    const avail = await isLlmAvailable();
     results.tests.push({
-      test: "fetch internal-api.z.ai",
-      status: res.status,
-      ok: res.ok,
+      test: "isLlmAvailable",
+      available: avail.available,
+      activeProvider: avail.provider,
       latency: Date.now() - t0,
-      body: (await res.text()).slice(0, 200),
     });
   } catch (e: any) {
     results.tests.push({
-      test: "fetch internal-api.z.ai",
+      test: "isLlmAvailable",
       error: e.message,
-      cause: e.cause?.message || e.cause?.code || "unknown",
     });
   }
 
-  // Test 2: Try with the SDK
+  // Test 2: Try a real chat completion
   try {
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
     const t0 = Date.now();
-    const response = await zai.chat.completions.create({
-      messages: [{ role: "user", content: "Say hello" }],
+    const result = await createChatCompletion({
+      messages: [{ role: "user", content: "Say hello in 3 words" }],
+      maxTokens: 20,
     });
     results.tests.push({
-      test: "SDK chat.completions.create",
+      test: "createChatCompletion",
       ok: true,
-      latency: Date.now() - t0,
-      response: response.choices[0]?.message?.content?.slice(0, 100),
+      provider: result.provider,
+      model: result.model,
+      latency: result.latencyMs,
+      response: result.content.slice(0, 100),
+      usage: result.usage,
     });
   } catch (e: any) {
     results.tests.push({
-      test: "SDK chat.completions.create",
+      test: "createChatCompletion",
       error: e.message,
-      cause: e.cause?.message || "unknown",
     });
   }
 
-  return NextResponse.json(results, { status: 200 });
+  return NextResponse.json(results);
 }

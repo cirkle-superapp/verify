@@ -95,7 +95,7 @@ const LICENSE_BY_PACKAGE: Record<string, string> = {
   "tesseract.js": "Apache-2.0",
   uuid: "MIT",
   vaul: "MIT",
-  "z-ai-web-dev-sdk": "MIT",
+  "z-ai-web-dev-sdk-REMOVED": "removed — using Groq/OpenRouter/NVIDIA/HuggingFace instead",
   zod: "MIT",
   zustand: "MIT",
   // devDependencies
