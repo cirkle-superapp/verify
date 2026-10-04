@@ -120,11 +120,11 @@ function buildSystemPrompt(chunks: KnowledgeChunk[]): string {
 /**
  * Fallback answer builder when the LLM is unavailable.
  *
- * This happens on Vercel production where the z-ai SDK's internal API
- * endpoint (internal-api.z.ai) is not reachable — it's only accessible
- * from the sandbox dev environment. When that happens, we still want
- * the chatbot to return a useful, conversational answer from the
- * knowledge base rather than just an error.
+ * This happens when all 4 LLM providers (Groq, OpenRouter, NVIDIA,
+ * HuggingFace) are unreachable — e.g., network issues or all API keys
+ * are rate-limited. When that happens, we still want the chatbot to
+ * return a useful, conversational answer from the knowledge base rather
+ * than just an error.
  *
  * Delegates to `generateConversationalFallback()` in
  * `src/lib/chatbot-fallback.ts`, which:
@@ -310,8 +310,9 @@ export async function GET() {
       service: "cirkle-assistant",
       description:
         "RAG-powered chatbot for the Cirkle Identity Verification platform. Send POST with {messages:[{role,content}]} to chat.",
-      model: "glm-4-plus",
-      llmProvider: "z-ai-web-dev-sdk",
+      model: getChatbotModel(),
+      llmProvider: getChatbotProvider(),
+      llmProviders: getConfiguredProviders(),
       rateLimit: { limit: RATE_LIMIT_PER_MIN, window: "1m" },
       knowledgeBase: stats,
       cors: "enabled",

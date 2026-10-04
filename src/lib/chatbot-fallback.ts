@@ -1,10 +1,9 @@
 /**
  * Conversational Fallback for the Cirkle Assistant chatbot.
  *
- * When the LLM (z-ai-web-dev-sdk) is not directly reachable — which
- * happens on Vercel production where internal-api.z.ai is sandbox-only,
- * or when the API token is missing/invalid — the chat API falls back to
- * a knowledge-base-only answer.
+ * When all 4 LLM providers (Groq, OpenRouter, NVIDIA, HuggingFace) are
+ * unreachable — e.g., network issues, rate limits, or missing API keys —
+ * the chat API falls back to a knowledge-base-only answer.
  *
  * The previous fallback (in src/app/api/chat/route.ts) just dumped the
  * raw knowledge chunks. This module produces a more conversational,
