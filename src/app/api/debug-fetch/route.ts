@@ -1,61 +1,40 @@
 import { NextResponse } from "next/server";
-import { createChatCompletion, isLlmAvailable, getConfiguredProviders } from "@/lib/multi-llm";
+import { processMessage } from "@/lib/custom-nlp";
 
 export const runtime = "nodejs";
 
 /**
- * GET /api/debug-fetch — test if the LLM providers are reachable
+ * GET /api/debug-fetch — test the self-hosted NLP engine
  *
- * Tests all configured AI providers (Groq, OpenRouter, NVIDIA, HuggingFace)
- * to verify API keys are working and the platform can generate real LLM
- * responses.
+ * The Cirkle platform IS the API. This endpoint tests the custom NLP
+ * engine (TF-IDF + intent classification + response generation).
+ * Zero external API calls.
  */
 export async function GET() {
-  const results: any = {
-    timestamp: new Date().toISOString(),
-    providers: getConfiguredProviders(),
-    tests: [],
-  };
-
-  // Test 1: Check if any LLM provider is available
+  const start = Date.now();
   try {
-    const t0 = Date.now();
-    const avail = await isLlmAvailable();
-    results.tests.push({
-      test: "isLlmAvailable",
-      available: avail.available,
-      activeProvider: avail.provider,
-      latency: Date.now() - t0,
+    const result = await processMessage("What security features does the Egyptian national ID have?");
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      engine: "custom-nlp",
+      model: "cirkle-nlp-v1",
+      externalApiCalls: 0,
+      test: {
+        query: "What security features does the Egyptian national ID have?",
+        intent: result.intent,
+        latencyMs: result.processingTimeMs,
+        sourcesCount: result.sources.length,
+        response: result.response.slice(0, 200),
+        followUps: result.followUps,
+      },
+      totalLatencyMs: Date.now() - start,
     });
   } catch (e: any) {
-    results.tests.push({
-      test: "isLlmAvailable",
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      engine: "custom-nlp",
       error: e.message,
+      totalLatencyMs: Date.now() - start,
     });
   }
-
-  // Test 2: Try a real chat completion
-  try {
-    const t0 = Date.now();
-    const result = await createChatCompletion({
-      messages: [{ role: "user", content: "Say hello in 3 words" }],
-      maxTokens: 20,
-    });
-    results.tests.push({
-      test: "createChatCompletion",
-      ok: true,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latencyMs,
-      response: result.content.slice(0, 100),
-      usage: result.usage,
-    });
-  } catch (e: any) {
-    results.tests.push({
-      test: "createChatCompletion",
-      error: e.message,
-    });
-  }
-
-  return NextResponse.json(results);
 }

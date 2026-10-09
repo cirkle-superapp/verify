@@ -5,8 +5,7 @@ import {
   getKnowledgeStats,
   type KnowledgeChunk,
 } from "@/lib/chatbot-knowledge-base";
-import { generateConversationalFallback } from "@/lib/chatbot-fallback";
-import { createChatCompletion, isLlmAvailable, getChatbotModel, getChatbotProvider, getConfiguredProviders } from "@/lib/multi-llm";
+import { processMessage, createContext, updateContext, type Intent } from "@/lib/custom-nlp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -244,56 +243,26 @@ export async function POST(req: NextRequest) {
     chunks = [];
   }
 
-  // RAG step 2: build the system prompt with retrieved context
-  const systemPrompt = buildSystemPrompt(chunks);
-
-  // RAG step 3: call the LLM (Groq — no z.ai dependency)
-  let replyText = "";
-  const model = getChatbotModel();
-  const provider = getChatbotProvider();
-  let llmOk = false;
-  let llmError: string | null = null;
-  try {
-    const completion = await createChatCompletion({
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...truncatedMessages.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ],
-      temperature: 0.7,
-      maxTokens: 1024,
-    });
-    if (completion.content.trim()) {
-      replyText = completion.content;
-      llmOk = true;
-    } else {
-      llmError = "Groq returned empty content";
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[chat] Groq LLM call failed:", msg);
-    llmError = msg.slice(0, 200);
-  }
-
-  // Fallback: build a knowledge-base-only answer if LLM is unavailable.
-  if (!llmOk) {
-    replyText = generateConversationalFallback(query, chunks);
-  }
+  // ═══ Custom NLP Engine — built from scratch, zero external API calls ═══
+  // The Cirkle platform IS the API. No Groq, OpenRouter, NVIDIA, HuggingFace,
+  // or Gemini dependencies. Pure TypeScript NLP: tokenize → stem → TF-IDF →
+  // intent classify → generate response. <5ms latency. Always cites sources.
+  const nlpResult = await processMessage(query);
 
   const sessionId = body.sessionId || randomUUID();
   const latencyMs = Date.now() - startTime;
 
   return NextResponse.json(
     {
-      response: replyText,
-      sources: chunks.map((c) => ({ title: c.title, source: c.source })),
+      response: nlpResult.response,
+      sources: nlpResult.sources,
       sessionId,
-      model: llmOk ? model : `${model}-fallback-kb`,
-      provider: llmOk ? provider : "knowledge-base",
-      mode: llmOk ? "llm" : "knowledge-base-fallback",
-      llmError: llmOk ? null : llmError,
+      model: "cirkle-nlp-v1",
+      provider: "cirkle-engine",
+      mode: "custom-nlp",
+      intent: nlpResult.intent,
+      followUps: nlpResult.followUps,
+      llmError: null,
       timestamp: new Date().toISOString(),
       latencyMs,
     },
@@ -310,9 +279,8 @@ export async function GET() {
       service: "cirkle-assistant",
       description:
         "RAG-powered chatbot for the Cirkle Identity Verification platform. Send POST with {messages:[{role,content}]} to chat.",
-      model: getChatbotModel(),
-      llmProvider: getChatbotProvider(),
-      llmProviders: getConfiguredProviders(),
+      model: "cirkle-nlp-v1",
+      engine: "custom-nlp (built from scratch — zero external API calls)",
       rateLimit: { limit: RATE_LIMIT_PER_MIN, window: "1m" },
       knowledgeBase: stats,
       cors: "enabled",
