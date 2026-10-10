@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio, BarChart3, Shield, Box } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio, BarChart3, Shield, Box, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -23,13 +23,14 @@ import { ApiDocsModal } from "@/components/verify/api-docs-modal";
 import { BenchmarkDashboard } from "@/components/verify/benchmark-dashboard";
 import { TierLadder } from "@/components/verify/tier-ladder";
 import { BlockchainExplorer } from "@/components/verify/blockchain-explorer";
+import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 import { ChatWidget } from "@/components/chatbot/chat-widget";
 import { LocaleToggle } from "@/components/i18n/locale-toggle";
 import { useI18n } from "@/components/i18n/use-i18n";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 
-type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live" | "benchmark" | "tiers" | "chain";
+type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live" | "benchmark" | "tiers" | "chain" | "admin";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
@@ -66,6 +67,7 @@ export default function Home() {
             <NavButton active={view === "benchmark"} onClick={() => setView("benchmark")} icon={BarChart3} label={t("nav.benchmark")} />
             <NavButton active={view === "tiers"} onClick={() => setView("tiers")} icon={Shield} label="Tiers" />
             <NavButton active={view === "chain"} onClick={() => setView("chain")} icon={Box} label="Chain" />
+            <NavButton active={view === "admin"} onClick={() => setView("admin")} icon={Server} label="Admin" />
             <ApiDocsModal />
             <LocaleToggle />
           </div>
@@ -92,6 +94,8 @@ export default function Home() {
           <TierLadder onBack={() => setView("wizard")} />
         ) : view === "chain" ? (
           <BlockchainExplorer onBack={() => setView("wizard")} />
+        ) : view === "admin" ? (
+          <AdminDashboard onBack={() => setView("wizard")} />
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (
