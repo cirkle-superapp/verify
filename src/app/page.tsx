@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio, BarChart3 } from "lucide-react";
+import { History, Home as HomeIcon, FlaskConical, Database, Globe, Gauge, Radio, BarChart3, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useVerificationStore } from "@/lib/verification-store";
@@ -21,13 +21,14 @@ import { InfraDashboard } from "@/components/verify/infra-dashboard";
 import { RealtimeDashboard } from "@/components/verify/realtime-dashboard";
 import { ApiDocsModal } from "@/components/verify/api-docs-modal";
 import { BenchmarkDashboard } from "@/components/verify/benchmark-dashboard";
+import { TierLadder } from "@/components/verify/tier-ladder";
 import { CirkleLogo } from "@/components/brand/cirkle-logo";
 import { ChatWidget } from "@/components/chatbot/chat-widget";
 import { LocaleToggle } from "@/components/i18n/locale-toggle";
 import { useI18n } from "@/components/i18n/use-i18n";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 
-type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live" | "benchmark";
+type View = "wizard" | "history" | "eval" | "training" | "specs" | "infra" | "live" | "benchmark" | "tiers";
 
 export default function Home() {
   const step = useVerificationStore((s) => s.step);
@@ -62,6 +63,7 @@ export default function Home() {
             <NavButton active={view === "live"} onClick={() => setView("live")} icon={Radio} label="Live" />
             <NavButton active={view === "eval"} onClick={() => setView("eval")} icon={FlaskConical} label={t("nav.lab")} />
             <NavButton active={view === "benchmark"} onClick={() => setView("benchmark")} icon={BarChart3} label={t("nav.benchmark")} />
+            <NavButton active={view === "tiers"} onClick={() => setView("tiers")} icon={Shield} label="Tiers" />
             <ApiDocsModal />
             <LocaleToggle />
           </div>
@@ -84,6 +86,8 @@ export default function Home() {
           <EvaluationLab onBack={() => setView("wizard")} />
         ) : view === "benchmark" ? (
           <BenchmarkDashboard onBack={() => setView("wizard")} />
+        ) : view === "tiers" ? (
+          <TierLadder onBack={() => setView("wizard")} />
         ) : (
           <div className="space-y-6">
             {step !== "intro" && (
