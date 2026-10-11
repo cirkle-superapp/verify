@@ -48,6 +48,7 @@ async function callOCRService(image: string): Promise<{ text: string; confidence
 function mergeSelfHostedAndConsensus(
   selfHosted: ExtractedDocumentData | null,
   consensus: ExtractedDocumentData | null,
+  docType?: string,
 ): ExtractedDocumentData {
   if (!consensus) return selfHosted || { confidence: 0, passes: 0 };
   if (!selfHosted) return consensus;
@@ -106,38 +107,116 @@ function mergeSelfHostedAndConsensus(
 
   merged.passes = (selfHosted.passes || 0) + (consensus.passes || 0);
 
-  // ─── FINAL FALLBACK: If all extraction failed but Arabic OCR text is available ──
-  // Parse the arabicText using rule-based regex to extract fields
-  if (merged.arabicText && !merged.fullNameAr && !merged.nationalId && !merged.gender) {
-    const text = merged.arabicText;
+  // ─── FINAL FALLBACK: Always run when OCR text is available ──
+  // Parse both arabicText + rawText using rule-based regex to extract/fix fields.
+  // This runs even if some fields were partially extracted (they might be garbage).
+  const fallbackText = (merged.arabicText || "") + "\n" + (merged.rawText || "");
+  if (fallbackText.trim().length > 10) {
+    const text = fallbackText;
     const lines = text.split("\n").map((l: string) => l.trim());
-    
-    // Name: line after a line containing "الاسم" or "الإسم"
-    if (!merged.fullNameAr) {
+
+    // ── Passport-specific extraction ──
+    // Passport No: after "Passport No" / "رقم الجواز" or near P< country code
+    // For passports, the number is usually 8-9 chars (A12345678 or 123456789)
+    if (!merged.documentNo || merged.documentNo.length < 5) {
+      // Try: after "Passport No" label
+      const passMatch = text.match(/(?:Passport\s*No\.?\s*[:\-]?\s*|رقم\s*الجواز\s*[:\-]?\s*)([A-Z0-9]{6,12})/i);
+      if (passMatch) merged.documentNo = passMatch[1];
+      // Try: 8-9 digit number near "P EGY" or "P<EGY"
+      if (!merged.documentNo || merged.documentNo.length < 5) {
+        const nearP = text.match(/P\s*(?:<|EGY|SAU|ARE|UAE|KWT|QAT|BHR|OMN|JOR|MAR|TUN|DZA|LBN|IRQ|SYR|SDN|LBY|YEM|IRN|TUR)\s+([A-Z]?\d{6,9})/i);
+        if (nearP) merged.documentNo = nearP[1];
+      }
+    }
+
+    // If we have a passport number but the nationalId was set to a short number
+    // (which is actually the passport number), move it to documentNo
+    if (merged.nationalId && merged.nationalId.length < 14 && merged.nationalId.length >= 6 &&
+        (!merged.documentNo || merged.documentNo.length < 5)) {
+      merged.documentNo = merged.nationalId;
+      merged.nationalId = undefined; // Clear — this was the passport number, not a national ID
+    }
+
+    // Country code: after "Country Code" / "رمز البلد" or 3-letter code after P<
+    if (!merged.extraFields?._detectedCountry) {
+      const ccMatch = text.match(/(?:Country\s*Code\s*[:\-]?\s*|رمز\s*البلد\s*[:\-]?\s*)([A-Z]{3})/i);
+      if (ccMatch) {
+        if (!merged.extraFields) merged.extraFields = {};
+        merged.extraFields._detectedCountry = ccMatch[1];
+      }
+      // Or try P EGY pattern (not MRZ P<EGY which may not be present)
+      if (!merged.extraFields?._detectedCountry) {
+        const pcc = text.match(/\bP\s+(EGY|SAU|ARE|UAE|KWT|QAT|BHR|OMN|JOR|MAR|TUN|DZA|LBN|IRQ|SYR|SDN|LBY|YEM|IRN|TUR)\b/i);
+        if (pcc) {
+          if (!merged.extraFields) merged.extraFields = {};
+          merged.extraFields._detectedCountry = pcc[1].toUpperCase();
+        }
+      }
+    }
+
+    // ── Name extraction (passport + national ID) ──
+    // Check if current name looks like garbage
+    const nameLooksValid = merged.fullNameAr && merged.fullNameAr.length > 5 &&
+      /[\u0600-\u06FF]/.test(merged.fullNameAr) &&
+      !/غير مطلوب|غير مطلوبة|بدون|لا يوجد|الموقف|التجنيد|التجنيدي/.test(merged.fullNameAr);
+    if (!nameLooksValid) {
+      // Strategy 1: Look for a label line followed by a name line
       for (let i = 0; i < lines.length; i++) {
-        if (/(الإسم|الاسم)/i.test(lines[i]) && i + 1 < lines.length) {
+        if (/(الإسم|الاسم|Name|Surname|Holder|Holder's\s*Name)/i.test(lines[i]) && i + 1 < lines.length) {
           const next = lines[i + 1].trim();
-          if (next.length > 5 && /[\u0600-\u06FF]/.test(next) && !/[/d:：]/.test(next)) {
+          if (next.length > 5 && /[\u0600-\u06FF]/.test(next) && !/[/d:：غير مطلوبالموقفالتجنيد]/.test(next)) {
             merged.fullNameAr = next;
             break;
           }
         }
       }
+      // Strategy 2: Find an Arabic line with 3+ words that looks like a name
+      // (not containing digits, not mostly Latin, not containing common non-name words)
+      if (!nameLooksValid) {
+        for (const line of lines) {
+          const words = line.trim().split(/\s+/);
+          const arabicChars = (line.match(/[\u0600-\u06FF]/g) || []).length;
+          const latinChars = (line.match(/[a-zA-Z]/g) || []).length;
+          const digitChars = (line.match(/\d/g) || []).length;
+          // Must be 3-6 Arabic words, mostly Arabic, no digits, 10-60 chars
+          if (words.length >= 3 && words.length <= 6 &&
+              arabicChars > latinChars && // more Arabic than Latin
+              digitChars === 0 && // NO digits in names
+              line.length > 10 && line.length < 60 &&
+              !/غير|مطلوب|المهنة|الوظيفة|العنوان|الجنسية|الجنس|التاريخ|الرمز|البلد|النوع|الجواز|مكان|الإصدار|الانتهاء|محل|الميلاد|Country|Passport|Type|Sex|Date/.test(line)) {
+            merged.fullNameAr = line.trim();
+            break;
+          }
+        }
+      }
     }
-    
-    // Gender: ذكر = Male, أنثى = Female
-    if (!merged.gender) {
+
+    // ── Gender: ذكر = Male, أنثى = Female, or M/F from MRZ ──
+    if (!merged.gender || (merged.gender !== "Male" && merged.gender !== "Female")) {
       if (/ذكر\b/.test(text)) merged.gender = "Male";
       else if (/أنثى|انثى\b/.test(text)) merged.gender = "Female";
+      // For passports: look for M or F after "Sex" / "الجنس"
+      else {
+        const sexMatch = text.match(/(?:Sex|الجنس)\s*[:\-]?\s*([MF])\b/i);
+        if (sexMatch) merged.gender = sexMatch[1].toUpperCase() === "M" ? "Male" : "Female";
+      }
     }
-    
-    // Nationality: match nationality words
-    if (!merged.nationality) {
-      const m = text.match(/\b(مصري|سعودي|إماراتي|كويتي|قطري|أردني|مغربي|تونسي|جزائري|لبناني|عراقي|سوري|ليبي|سوداني|بحريني|عماني|يمني|فلسطيني|تركي|إيراني)\b/);
+
+    // ── Nationality: match nationality words ──
+    // Only overwrite if current nationality looks invalid
+    const natLooksValid = merged.nationality && merged.nationality.length >= 3 &&
+      !/Sex|التوع|الجنس|Type|النوع/.test(merged.nationality);
+    if (!natLooksValid) {
+      const m = text.match(/\b(مصري|مصرية|سعودي|سعودية|إماراتي|إماراتية|كويتي|قطري|أردني|مغربي|تونسي|جزائري|لبناني|عراقي|سوري|ليبي|سوداني|بحريني|عماني|يمني|فلسطيني|تركي|إيراني|EGY|EGYPT|SAU|SAUDI|ARE|UAE|EGYPTIAN)\b/i);
       if (m) merged.nationality = m[1];
+      // Also use detected country code
+      if (!merged.nationality || merged.nationality.length < 3) {
+        const cc = merged.extraFields?._detectedCountry;
+        if (cc) merged.nationality = cc;
+      }
     }
-    
-    // Birth date: Arabic numerals ١٩٨٧/٠٧/١٨ or Latin 1987/07/18
+
+    // ── Birth date: Arabic numerals or Latin ──
     if (!merged.birthDate) {
       const toLatin = (s: string) => s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
       const arDate = text.match(/([\u0660-\u0669]{4})[\/\-]([\u0660-\u0669]{2})[\/\-]([\u0660-\u0669]{2})/);
@@ -147,32 +226,38 @@ function mergeSelfHostedAndConsensus(
         if (latDate) merged.birthDate = `${latDate[1]}-${latDate[2]}-${latDate[3]}`;
       }
     }
-    
-    // National ID: 14 digits (Arabic or Latin)
-    if (!merged.nationalId) {
+
+    // ── National ID: 14 digits (only for national_id doc type, not passport) ──
+    if (docType !== "passport" && (!merged.nationalId || merged.nationalId.length < 14)) {
       const toLatin = (s: string) => s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
       const arId = text.match(/([\u0660-\u0669]{10,14})/);
       if (arId) merged.nationalId = toLatin(arId[1]);
-      if (!merged.nationalId) {
-        const latId = text.match(/(\d{14})/);
+      if (!merged.nationalId || merged.nationalId.length < 14) {
+        const latId = text.match(/(?<!\d)(\d{14})(?!\d)/);
         if (latId) merged.nationalId = latId[1];
       }
     }
-    
-    // Job: after "الوظيفة" or "المهنة"
+
+    // ── Job: after "الوظيفة" or "المهنة" ──
     if (!merged.job) {
       const m = text.match(/(?:الوظيفة|المهنة)\s*:?\s*(.+)/);
       if (m) merged.job = m[1].trim().split(/[/\n]/)[0].trim();
     }
-    
-    // Address: after "العنوان"
+
+    // ── Address: after "العنوان" ──
     if (!merged.address) {
       const m = text.match(/(?:العنوان)\s*:?\s*(.+)/);
       if (m) merged.address = m[1].trim().split("\n")[0];
     }
-    
-    // If we extracted any fields, boost confidence
-    if (merged.fullNameAr || merged.gender || merged.nationalId) {
+
+    // ── Expiry date ──
+    if (!merged.expiryDate) {
+      const expMatch = text.match(/(?:Expiry|انتهاء|الانتهاء|Expires?)\s*[:\-]?\s*(\d{4}[\/\-]\d{2}[\/\-]\d{2})/i);
+      if (expMatch) merged.expiryDate = expMatch[1];
+    }
+
+    // ── If we extracted any valid fields, boost confidence ──
+    if (merged.fullNameAr || merged.documentNo || merged.nationalId || merged.gender) {
       if (!merged.extraFields) merged.extraFields = {};
       merged.extraFields._fallbackParsed = "true";
       if (merged.confidence < 0.5) merged.confidence = 0.6;
@@ -267,7 +352,7 @@ export async function POST(req: NextRequest) {
       throw new Error("Both OCR engines failed");
     }
 
-    const data = mergeSelfHostedAndConsensus(selfHosted, consensus);
+    const data = mergeSelfHostedAndConsensus(selfHosted, consensus, docType);
 
     const elapsed = Date.now() - startedAt;
     logAudit({
