@@ -191,14 +191,38 @@ function mergeSelfHostedAndConsensus(
       }
     }
 
-    // ── Gender: ذكر = Male, أنثى = Female, or M/F from MRZ ──
+    // ── Gender: ذكر = Male, أنثى = Female, or M/F from Sex field ──
+    // Note: \b doesn't work well with Arabic — use includes/contains instead
     if (!merged.gender || (merged.gender !== "Male" && merged.gender !== "Female")) {
-      if (/ذكر\b/.test(text)) merged.gender = "Male";
-      else if (/أنثى|انثى\b/.test(text)) merged.gender = "Female";
-      // For passports: look for M or F after "Sex" / "الجنس"
+      if (text.includes("ذكر")) merged.gender = "Male";
+      else if (text.includes("أنثى") || text.includes("انثى")) merged.gender = "Female";
+      // For passports: look for M or F after "Sex" / "الجنس" label
       else {
-        const sexMatch = text.match(/(?:Sex|الجنس)\s*[:\-]?\s*([MF])\b/i);
+        const sexMatch = text.match(/(?:Sex|الجنس)\s*[:\-\|]*\s*([MF])\b/i);
         if (sexMatch) merged.gender = sexMatch[1].toUpperCase() === "M" ? "Male" : "Female";
+      }
+    }
+
+    // ── English name extraction (for passports + bilingual docs) ──
+    // Look for an all-caps Latin line with 2+ words (passport names are UPPERCASE)
+    if (!merged.fullNameEn) {
+      for (const line of lines) {
+        const words = line.trim().split(/\s+/);
+        // Must be 2-6 words, ALL uppercase Latin, 10-60 chars
+        if (words.length >= 2 && words.length <= 6 &&
+            line.length > 10 && line.length < 60 &&
+            /^[A-Z\s]+$/.test(line.trim()) && // all uppercase Latin
+            !/^(TYPE|COUNTRY|PASSPORT|SEX|DATE|PLACE|AUTHORITY|NATIONAL|NAME|SURNAME|GIVEN|BIRTH|ISSUE|EXPIRY|EGYPT|EGYPTIAN)/.test(line.trim())) {
+          merged.fullNameEn = line.trim();
+          break;
+        }
+      }
+      // Also try to concatenate consecutive uppercase lines
+      if (!merged.fullNameEn) {
+        const upperLines = lines.filter(l => /^[A-Z]{3,}$/.test(l.trim()) && l.trim().length > 3);
+        if (upperLines.length >= 2) {
+          merged.fullNameEn = upperLines.join(" ");
+        }
       }
     }
 
@@ -250,10 +274,106 @@ function mergeSelfHostedAndConsensus(
       if (m) merged.address = m[1].trim().split("\n")[0];
     }
 
-    // ── Expiry date ──
-    if (!merged.expiryDate) {
-      const expMatch = text.match(/(?:Expiry|انتهاء|الانتهاء|Expires?)\s*[:\-]?\s*(\d{4}[\/\-]\d{2}[\/\-]\d{2})/i);
-      if (expMatch) merged.expiryDate = expMatch[1];
+    // ── Expiry + Issue dates ──
+    // Also overwrite if current expiryDate doesn't look like a date
+    if (!merged.expiryDate || !/\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(merged.expiryDate)) {
+      // Strategy 1: Find all dates near "Expiry" / "Issue" labels
+      const textLines = text.split("\n");
+      const allDates: string[] = [];
+      for (let i = 0; i < textLines.length; i++) {
+        if (/Expiry|Issue|انتهاء|إصدار|الإصدار|الانتهاء/i.test(textLines[i])) {
+          for (let j = i; j < Math.min(i + 4, textLines.length); j++) {
+            const lineDates = textLines[j].match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/g);
+            if (lineDates) allDates.push(...lineDates);
+          }
+        }
+      }
+      // Strategy 2: Find concatenated dates (dd/mm/yyyydd/mm/yyyy)
+      if (allDates.length === 0) {
+        const concat = text.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})(\d{2}[\/\-]\d{2}[\/\-]\d{4})/);
+        if (concat) { allDates.push(concat[1]); allDates.push(concat[2]); }
+      }
+      // Strategy 3: Find any dates in the whole text
+      if (allDates.length === 0) {
+        const allDatesInText = text.match(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g);
+        if (allDatesInText) allDates.push(...allDatesInText);
+      }
+
+      if (allDates.length >= 2) {
+        // Expiry = later date, Issue = earlier date
+        const sorted = allDates.sort((a, b) => {
+          const [ad, am, ay] = a.split(/[\/\-]/).map(Number);
+          const [bd, bm, by] = b.split(/[\/\-]/).map(Number);
+          return (ay * 10000 + am * 100 + ad) - (by * 10000 + bm * 100 + bd);
+        });
+        merged.expiryDate = sorted[sorted.length - 1]; // latest = expiry
+        if (!merged.extraFields) merged.extraFields = {};
+        merged.extraFields._issueDate = sorted[0]; // earliest = issue
+      } else if (allDates.length === 1) {
+        merged.expiryDate = allDates[0];
+      }
+    }
+
+    // ── Issue date ──
+    if (!merged.extraFields?._issueDate) {
+      const textLines = text.split("\n");
+      for (let i = 0; i < textLines.length; i++) {
+        if (/Issue|إصدار|الإصدار/i.test(textLines[i]) && !/Expiry|انتهاء/i.test(textLines[i])) {
+          for (let j = i; j < Math.min(i + 4, textLines.length); j++) {
+            const dates = textLines[j].match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/g);
+            if (dates && dates.length > 0) {
+              if (!merged.extraFields) merged.extraFields = {};
+              merged.extraFields._issueDate = dates[0]; // first date = issue
+              break;
+            }
+          }
+          if (merged.extraFields?._issueDate) break;
+        }
+      }
+    }
+
+    // ── Birth place (for passports) ──
+    if (!merged.extraFields?._birthPlace) {
+      // "Place Of Birth" / "مكان الميلاد" followed by a word
+      const bpMatch = text.match(/(?:Place\s*Of\s*Birth|مكان\s*الميلاد)\s*[:\-]?\s*([A-Z\s]{3,20})/i);
+      if (bpMatch) {
+        if (!merged.extraFields) merged.extraFields = {};
+        merged.extraFields._birthPlace = bpMatch[1].trim();
+      }
+    }
+
+    // ── MRZ extraction from raw text (if MRZ parser didn't run) ──
+    if (!merged.mrzParsed) {
+      // TD3: 2 lines of 44 chars each (A-Z, 0-9, <)
+      // TD1: 3 lines of 30 chars each
+      // Look for lines that are mostly A-Z<0-9 with length 28-44
+      const mrzLines = lines.filter(l =>
+        l.length >= 28 && l.length <= 45 &&
+        /^[A-Z0-9<]+$/.test(l) &&
+        l.includes("<")
+      );
+      if (mrzLines.length >= 2) {
+        // Try TD3 (2 lines × 44)
+        if (mrzLines.length >= 2 && mrzLines[0].length >= 40) {
+          const mrzText = mrzLines.slice(0, 2).join("\n");
+          if (!merged.extraFields) merged.extraFields = {};
+          merged.extraFields._mrzText = mrzText;
+          merged.mrzParsed = true;
+          // Extract from TD3 line 2: passport number is chars 1-9
+          if (mrzLines[1].length >= 10) {
+            const docNum = mrzLines[1].substring(0, 9).replace(/</g, "");
+            if (docNum && docNum.length >= 6 && (!merged.documentNo || merged.documentNo.length < 5)) {
+              merged.documentNo = docNum;
+            }
+            // Sex: position 20 (0-indexed)
+            if (mrzLines[1].length > 20) {
+              const sex = mrzLines[1][20];
+              if (sex === "M" && (!merged.gender || merged.gender === "unknown")) merged.gender = "Male";
+              else if (sex === "F" && (!merged.gender || merged.gender === "unknown")) merged.gender = "Female";
+            }
+          }
+        }
+      }
     }
 
     // ── If we extracted any valid fields, boost confidence ──
