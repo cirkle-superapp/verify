@@ -25,6 +25,7 @@ import { run as continuousAuthTests } from "./continuous-auth.test";
 import { run as webhookSystemTests } from "./webhook-system.test";
 import { run as healthTests } from "./health.test";
 import { run as endpointTests } from "./endpoints.test";
+import { run as phase2Tests } from "./phase2.test";
 import { ensureServerRunning, stopSpawnedServer, BASE_URL } from "./lib/server";
 import { statusGlyph, type TestResult } from "./lib/runner";
 
@@ -39,6 +40,7 @@ const FILES: Array<{ name: string; run: () => Promise<TestResult[]> }> = [
   { name: "adversarial-detection.test.ts", run: adversarialDetectionTests },
   { name: "multimodal-fusion.test.ts", run: multimodalFusionTests },
   { name: "continuous-auth.test.ts", run: continuousAuthTests },
+  { name: "phase2.test.ts", run: phase2Tests },
   { name: "health.test.ts", run: healthTests },
   { name: "endpoints.test.ts", run: endpointTests },
   { name: "webhook-system.test.ts", run: webhookSystemTests },
@@ -55,7 +57,7 @@ async function main() {
 
   // ─── Pure module tests (no server needed) ─────────────────────
   const moduleResults: Array<{ file: string; results: TestResult[] }> = [];
-  for (const f of FILES.slice(0, 10)) {
+  for (const f of FILES.slice(0, 11)) {
     console.log(`\n── ${f.name} ─────────────────────────────────────────────`);
     const results = await f.run();
     moduleResults.push({ file: f.name, results });
@@ -81,7 +83,7 @@ async function main() {
   }
 
   const httpResults: Array<{ file: string; results: TestResult[] }> = [];
-  for (const f of FILES.slice(10)) {
+  for (const f of FILES.slice(11)) {
     console.log(`\n── ${f.name} ─────────────────────────────────────────────`);
     let results: TestResult[];
     try {
